@@ -1,0 +1,19 @@
+[package]
+name = "lera"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Internal
+lera_macros.workspace = true
+lera_uniffi_build.workspace = true
+
+# External
+askama = "0.12"
+clap = { version = "4.5.48", features = ["derive"] }
+camino = { version = "1.0.8" }
+syn.workspace = true
+uniffi = { workspace = true, features = ["cli"] }
+uniffi_bindgen = { workspace = true }
+regex = "1.10"
+quote.workspace = true

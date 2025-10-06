@@ -1,0 +1,14 @@
+mod apple
+mod rust
+mod android
+
+default: apple::default
+
+clean: 
+    just apple::clean
+    just rust::clean
+    just android::clean
+    rm -rf .build
+
+swift-format: apple::swift-format
+swift-format-check: apple::swift-format-check

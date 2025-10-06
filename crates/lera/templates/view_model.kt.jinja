@@ -1,0 +1,44 @@
+{% for model in models %}
+class {{ model.model_name }}ViewModel(
+    state: {{ model.state_name }} = {{ model.default_state_fn }}()
+) : androidx.lifecycle.ViewModel() {
+
+    private val listener = Listener()
+    private val model = {{ model.model_name }}(state, listener)
+    private val _uiState = kotlinx.coroutines.flow.MutableStateFlow(state)
+    val uiState: kotlinx.coroutines.flow.StateFlow<{{ model.state_name }}> =
+        _uiState.asStateFlow()
+
+    init {
+        listener.addForwarder { newState ->
+            _uiState.value = newState
+        }
+    }
+
+{% for method in model.methods %}
+    {{ method }}
+
+{% endfor %}
+    override fun onCleared() {
+        super.onCleared()
+        listener.clear()
+    }
+
+    private inner class Listener : {{ model.listener_name }} {
+        private var forwarder: (({{ model.state_name }}) -> Unit)? = null
+
+        fun addForwarder(forwarder: ({{ model.state_name }}) -> Unit) {
+            this.forwarder = forwarder
+        }
+
+        fun clear() {
+            forwarder = null
+        }
+
+        override fun onStateChange(state: {{ model.state_name }}) {
+            forwarder?.invoke(state)
+        }
+    }
+}
+
+{% endfor %}

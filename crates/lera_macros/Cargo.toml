@@ -1,0 +1,13 @@
+[package]
+name = "lera_macros"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+heck = "0.4"           # for Case conversion
+proc-macro2 = "1.0"
+quote.workspace = true
+syn.workspace = true

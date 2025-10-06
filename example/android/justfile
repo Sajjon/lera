@@ -1,0 +1,41 @@
+set export
+
+pwd := `pwd`
+CLASSPATH := "{{pwd}}/jars/jna.jar:{{pwd}}/jars/kotlinx-coroutines-core-jvm.jar"
+
+default: build-package-and-app
+
+
+download-if-needed url dst:
+  # If file exists, only redownload if remote is newer; otherwise download fresh
+  if [ -f {{dst}} ]; then \
+    echo "{{dst}} exists, checking freshness…"; \
+    curl -L -z {{dst}} -o {{dst}} {{url}}; \
+  else \
+    echo "Downloading {{dst}}"; \
+    curl -L -o {{dst}} {{url}}; \
+  fi
+
+install-jars:
+  mkdir -p jars
+  just download-if-needed https://repo1.maven.org/maven2/net/java/dev/jna/jna/5.17.0/jna-5.17.0.jar jars/jna.jar
+  just download-if-needed https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.10.2/kotlinx-coroutines-core-jvm-1.10.2.jar jars/kotlinx-coroutines-core-jvm.jar
+
+build-package-and-app:
+  just build-package
+  just build-app
+
+build-package:
+  cargo run \
+  --manifest-path ../rust/Cargo.toml \
+  --bin android-build -- \
+  --android-sources-dir android/lera/src/main/kotlin \
+  --android-jni-libs-dir android/lera/src/main/jniLibs
+
+build-app:
+  ./gradlew :app:assembleDebug
+
+clean:
+  rm -rf build
+  rm -rf app/build
+  rm -rf lera/build

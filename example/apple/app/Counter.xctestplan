@@ -1,0 +1,26 @@
+{
+  "configurations" : [
+    {
+      "id" : "C5E626A4-C3BD-4528-B768-F03616D67BF8",
+      "name" : "Configuration 1",
+      "options" : {
+        "targetForVariableExpansion" : {
+          "containerPath" : "container:..",
+          "identifier" : "ViewModelsFromRust",
+          "name" : "ViewModelsFromRust"
+        }
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:..",
+      "identifier" : "ViewModelsFromRust",
+      "name" : "ViewModelsFromRust"
+    }
+  },
+  "testTargets" : [
+
+  ],
+  "version" : 1
+}

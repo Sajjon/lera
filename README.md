@@ -1,0 +1,446 @@
+# lera
+Write ViewModels for SwiftUI and Jetpack Compose **only in Rust**, powered by [Mozilla UniFFI](https://github.com/mozilla/uniffi-rs).
+
+# Status: PoC
+> [!CAUTION]
+> Do not use this software in production, it's just a **P**roof **O**f **C**oncept (PoC)!
+> Albeit a matuer POC.
+> 
+> Test coverage is near zero, because it is a PoC!
+> Documentation is non-existing (besides this README), because it is a PoC!
+> Examples are few, because it is a PoC!
+> `<INSERT BAD>`, because it is a PoC!
+
+# What?
+`lera` is a set of procmacros (own [DSL](https://en.wikipedia.org/wiki/Domain-specific_language)), build scripts (build, bindgen, post-bindgen) allowing you to generate ready-to-use ViewModels for [SwiftUI](https://developer.apple.com/swiftui/) and [Jetpack Compose](https://developer.android.com/compose) in pure Rust only. 
+
+> [!NOTE]
+> The vision of lera is to be able to build iOS apps in SwiftUI and Android apps in Jetpack compose by writing **only UI** code natively (in Swift/Kotlin) with **all logic written in Rust**, in one place. 
+
+# Why?
+[UniFFI](https://github.com/mozilla/uniffi-rs) is amazing (this software is built in top of it!), however, it does not (yet) support `uniffi::viewmodel` (or similar), and even with support of `@Observable` annotations for `uniffi::Object` UniFFI does not export any Swift state as stored properties which SwiftUI could observe, nor any `: ViewModel()` inheritance nor `StateFlow` for Jetpack compose in Kotlin generated code.
+
+`lera` writes ViewModels which can be "observed" by SwiftUI and Jetpack Compose, ensuring the view updates according to `state`, and state is always up-to-date with changes made through input from views, and also changes made internally from within Rust itself (e.g. a background task in Rust which automatically increases a counter).
+
+# Usage
+macOS is assumed. You can surely make this work on Linux too, if you do, I welcome a PR with updated guides!
+## Prerequisites
+
+### Shared
+Disregarding if you are interested in Swift or Kotlin, these shared dependencies must be installed.
+
+#### Xcode
+Install [Xcode](https://developer.apple.com/xcode/)
+
+#### Rust
+Install [Rust](https://rust-lang.org/tools/install/)
+
+#### `brew`
+[`brew`](https://brew.sh/)
+
+#### `just`
+This project makes heavy use of [`just`](https://github.com/casey/just)
+```sh
+brew install just
+```
+
+#### `pre-commit` (for development)
+For development install [pre-commit](https://pre-commit.com)
+```sh
+brew install pre-commit
+```
+
+### Apple
+
+Getting Swift/Apple to work is easiest.
+
+#### Install Rust targets
+```sh
+rustup target add aarch64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim
+```
+
+### Android
+
+Getting Kotlin/Android to work is harder than Swift/Apple.
+
+#### Install Rust targets
+```sh
+rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
+```
+
+#### Install Java
+You can use `jenv` and install `openjdk 23`
+> [!TIP]
+> Don't forget to export `JAVA_HOME` and refresh your shell!
+
+#### Install JNA
+```
+just example::android::install-jars
+```
+
+#### Install NDK
+Still needed? Verify on another machine.
+
+# How it works under the hood
+> [!NOTE]
+> Large parts of this software is written using prompts like ChatGPT, thus 
+> **the code style might not at all reflect my own**, so don't judge me!
+> 
+> If/when this software is upgraded from a POC, large parts of it written
+> by AI ought to be rewritten.
+
+`lera` use [askama (.rinja) templates](https://github.com/askama-rs/askama) to generate [`@Observable`](https://developer.apple.com/documentation/observation/observable()) Swift Viewmodels which work in SwiftUI and `ViewModel()` classes in Kotlin with [`MutableStateFlow` properties](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines.flow/-mutable-state-flow/)
+
+This is done using several layers of "metaprogramming", Rust code ([procmacros](https://doc.rust-lang.org/reference/procedural-macros.html)) generating UniFFI compatible Rust code which generates Swift and Kotlin bindings, and Rust code using Swift/Kotlin-templates generating Swift/Kotlin code using the Swift/Kotlin bindings.
+
+# Demo
+
+See demo / example in [`example`](example) folder.
+
+## Rust side
+
+Source code can be found in [`example/rust`](example/rust)
+
+This is **all** you have to do in Rust land, in terms of Rust code.
+
+```rust
+#[derive(Clone, Default)]
+#[lera::state]
+pub struct CounterState {
+    pub count: i64,
+}
+
+#[lera::model(state = CounterState)]
+pub struct Counter {}
+
+#[lera::api]
+impl Counter {
+    pub fn increment_button_tapped(self: &Arc<Self>) {
+        self.mutate(|state| {
+            state.count += 1;
+        });
+    }
+    pub fn decrement_button_tapped(self: &Arc<Self>) {
+        self.mutate(|state| {
+            state.count -= 1;
+        });
+    }
+    pub fn reset_button_tapped(self: &Arc<Self>) {
+        self.mutate(|state| {
+            state.count = 0;
+        });
+    }
+    
+    /// Can take args and return values
+    pub fn tell_full_name(&self, first_name: &str, last_name: &str) -> String {
+        format!("{} {}", first_name, last_name)
+    }
+}
+```
+
+This is the simplest demo I've made, but I've also managed to create a background task in Rust which periodically increments the counter, and that state change propagates back to Swift thanks to the callback pattern.
+
+
+## Swift side
+
+Swift package can found in [`example/apple`](example/apple).
+
+### App demo
+SwiftUI example in [`example/apple/app`](example/apple/app) uses Swift package in [`example/apple`](example/apple) as a local dependency.
+
+This is how you use the by-`lera`-generated `CounterViewModel`:
+
+```swift
+import SwiftUI
+import ModelsFromRust
+
+public struct CounterView: View {
+    private let model: CounterViewModel
+    
+    public init(model: CounterViewModel = .init()) {
+        self.model = model
+    }
+    
+    public var body: some View {
+        VStack {
+            Text("Count: \(model.count)")
+            
+            Button("Increment") {
+                model.incrementButtonTapped()
+            }
+            
+            Button("Decrement") {
+                model.decrementButtonTapped()
+            }
+            
+            Button("Reset") {
+                model.resetButtonTapped()
+            }
+        }
+        .padding()
+    }
+}
+```
+
+### Swift Generated by `lera`
+
+Lera was used to generate a Swift package in [`example/apple`](example/apple). See below what it generates for you.
+
+The Swift code forwards actions from Swift to Rust, and any state changes occurring either directly as an effect of the action or state change happening internally inside of Rust (e.g. a background task) will all propagate back to Swift and to SwiftUI View (thanks to `@Observable`).
+
+
+```swift
+// MARK: CounterViewModel
+extension CounterState {
+    public init() {
+        self = newDefaultCounterState()
+    }
+}
+@Observable
+@dynamicMemberLookup
+public final class CounterViewModel: @unchecked Sendable {
+    /// This is state, set by listener
+    private var state: CounterState
+    
+    @ObservationIgnored
+    private let model: Counter
+    
+    @ObservationIgnored
+    private let listener: CounterStateChangeListener
+    
+    private init(state: CounterState, listener: CounterStateChangeListener) {
+        self.state = state
+        self.listener = listener
+        self.model = Counter(state: state, listener: listener)
+    }
+
+    public convenience init(
+        state: CounterState = CounterState()
+    ) {
+        let listener = Listener()
+        self.init(state: state, listener: listener)
+        listener.add(forwarder: Listener.Forwarder { [weak self] newState in
+            print("Swift forwarder got new state")
+            self?.state = newState
+        })
+    }
+}
+// MARK: Listener
+extension CounterViewModel {
+    fileprivate final class Listener: CounterStateChangeListener, @unchecked Sendable {
+        fileprivate struct Forwarder {
+            typealias OnStateChange = @Sendable (CounterState) -> Void
+            private let onStateChange: OnStateChange
+            init(_ onStateChange: @escaping OnStateChange) {
+                self.onStateChange = onStateChange
+            }
+            fileprivate func forward(_ state: CounterState) {
+                self.onStateChange(state)
+            }
+        }
+        private var forwarder: Forwarder?
+        init() {}
+        fileprivate func add(forwarder: Forwarder) {
+            self.forwarder = forwarder
+        }
+        // MARK: CounterStateChangeListener
+        func onStateChange(state: CounterState) {
+            forwarder?.forward(state)
+        }
+    }
+}
+// MARK: @dynamicMemberLookup
+extension CounterViewModel {
+    public subscript<Subject>(dynamicMember keyPath: KeyPath<CounterState, Subject>) -> Subject {
+        self.state[keyPath: keyPath]
+    }
+}
+// MARK: Forward Actions from view to model (Rust)
+extension CounterViewModel {
+    public func incrementButtonTapped() {
+        model.incrementButtonTapped()
+    }
+    public func decrementButtonTapped() {
+        model.decrementButtonTapped()
+    }
+    public func resetButtonTapped() {
+        model.resetButtonTapped()
+    }
+}
+```
+Using `Counter`, `CounterState`, `CounterStateChangeListener` generated by UniFFI (via `lera`).
+
+#### Run it
+
+```sh
+just example::apple::app::build-and-run
+```
+
+#### No retain cycles
+
+Of course I've verified that there are no retain cycles between Swift and Rust, all classes deinit as expected, even when there is a background task running, so no memory leaks introduced.
+
+## Kotlin Side
+
+Android/Kotlin works! Take a look at [`example/android`](example/android)
+
+### App demo
+
+A simple Android app can be found in [`example/android/app`](example/android/app), which uses a kotlin package built by `lera` as a local dependency.
+
+```kotlin
+@Composable
+fun CounterScreen(
+    counterViewModel: CounterViewModel = viewModel()
+) {
+    val counterUiState by counterViewModel.uiState.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Count: ${counterUiState.count}",
+            style = MaterialTheme.typography.displayLarge,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            Button(
+                onClick = { counterViewModel.decrementButtonTapped() }
+            ) {
+                Text("−")
+            }
+
+            Button(
+                onClick = { counterViewModel.resetButtonTapped() }
+            ) {
+                Text("Reset")
+            }
+
+            Button(
+                onClick = { counterViewModel.incrementButtonTapped() }
+            ) {
+                Text("+")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (counterUiState.isAutoIncrementing) {
+            Text(
+                text = "Counter is being incremented automatically every ${counterUiState.autoIncrementIntervalMs}ms",
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+            Button(onClick = { counterViewModel.stopAutoIncrementingButtonTapped() }) {
+                Text("Stop Auto")
+            }
+        } else {
+            Text(
+                text = "Automatic increment of the counter is stopped",
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+            Button(onClick = { counterViewModel.startAutoIncrementingButtonTapped() }) {
+                Text("Start Auto")
+            }
+        }
+    }
+}
+
+```
+
+#### Run it
+First build kotlin package with `lera` using `just`:
+```sh
+just example::android::build-package-and-app
+```
+
+Then open [`example/android/app`](example/android/app) with Android Studio and run the app.
+
+### Kotlin generated by `lera`
+
+```kotlin
+fun `newDefaultCounterState`(): CounterState {
+            return FfiConverterTypeCounterState.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_counters_fn_func_new_default_counter_state(
+    
+        _status)
+}
+    )
+}
+
+class CounterViewModel(
+    state: CounterState = newDefaultCounterState()
+) : androidx.lifecycle.ViewModel() {
+
+    private val listener = Listener()
+    private val model = Counter(state, listener)
+    private val _uiState = kotlinx.coroutines.flow.MutableStateFlow(state)
+    val uiState: kotlinx.coroutines.flow.StateFlow<CounterState> =
+        _uiState.asStateFlow()
+
+    init {
+        listener.addForwarder { newState ->
+            _uiState.value = newState
+        }
+    }
+
+
+    fun incrementButtonTapped() {
+        model.incrementButtonTapped()
+    }
+
+
+    fun decrementButtonTapped() {
+        model.decrementButtonTapped()
+    }
+
+
+    fun resetButtonTapped() {
+        model.resetButtonTapped()
+    }
+
+
+    fun startAutoIncrementingButtonTapped() {
+        model.startAutoIncrementingButtonTapped()
+    }
+
+
+    fun stopAutoIncrementingButtonTapped() {
+        model.stopAutoIncrementingButtonTapped()
+    }
+
+
+    override fun onCleared() {
+        super.onCleared()
+        listener.clear()
+    }
+
+    private inner class Listener : CounterStateChangeListener {
+        private var forwarder: ((CounterState) -> Unit)? = null
+
+        fun addForwarder(forwarder: (CounterState) -> Unit) {
+            this.forwarder = forwarder
+        }
+
+        fun clear() {
+            forwarder = null
+        }
+
+        override fun onStateChange(state: CounterState) {
+            forwarder?.invoke(state)
+        }
+    }
+}
+```

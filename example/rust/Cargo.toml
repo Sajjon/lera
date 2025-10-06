@@ -1,0 +1,36 @@
+[package]
+name = "counters"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[[bin]]
+name = "apple-build"
+path = "src/swift_build.rs"
+
+[[bin]]
+name = "android-build"
+path = "src/android_build.rs"
+
+
+[dependencies]
+lera = { path = "../../crates/lera" }
+lera_uniffi_build = { path = "../../crates/lera_uniffi_build" }
+tokio = { version = "1", features = ["full"] }
+uniffi = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093" }
+paste = "1.0.15"
+thiserror = "2.0.17"
+clap = { version = "4.5", features = ["derive"] }
+
+[dev-dependencies]
+uniffi = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093", features = [
+    "bindgen-tests",
+] }
+actix-rt = "2.11.0"
+
+[build-dependencies]
+uniffi = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093", features = [
+    "build",
+] }

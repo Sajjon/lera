@@ -1,0 +1,7 @@
+default: test
+
+test: 
+  CLASSPATH="$(pwd)/../android/jars/jna.jar:$(pwd)/../android/jars/kotlinx-coroutines-core-jvm.jar" cargo test
+
+clean: 
+  cargo clean

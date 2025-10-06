@@ -1,0 +1,19 @@
+default: build-and-run
+
+build-and-run:
+  just build-app
+  just run-app
+
+build-app:
+  xcodebuild -quiet \
+      -scheme Counter \
+      -configuration Debug \
+      -destination 'platform=macOS,arch=arm64' \
+      -derivedDataPath ../.build \
+    build
+
+run-app:
+  open ../.build/Build/Products/Debug/Counter.app
+
+clean:
+  rm -rf .build

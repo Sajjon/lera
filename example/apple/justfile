@@ -1,0 +1,35 @@
+mod app
+
+default: build-package-test
+
+build-package-test:
+  just build-package
+  just test-package
+
+build-package:
+  cargo run \
+   --manifest-path ../rust/Cargo.toml \
+   --bin apple-build -- \
+   --maconly \
+   --apple-sources-dir apple/Sources/UniFFI
+
+test-package:
+  swift test
+
+swift-format:
+  swift-format format app --recursive -i --configuration swiftformat.json
+
+swift-format-check:
+  swift-format lint app --recursive --configuration swiftformat.json --strict
+
+clean:
+  rm -rf .build
+  rm -rf build
+  rm -rf .swiftpm
+  just app::clean
+
+build-run-app: 
+  just build-package
+  just app::build-and-run
+
+

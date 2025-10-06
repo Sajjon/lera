@@ -1,0 +1,18 @@
+[workspace]
+members = ["crates/lera", "crates/lera_macros", "crates/lera_uniffi_build"]
+resolver = "2"
+exclude = ["example/rust"]
+
+[workspace.dependencies]
+# Internal dependencies
+lera = { path = "crates/lera", version = "0.1.0" }
+lera_macros = { path = "crates/lera_macros", version = "0.1.0" }
+lera_uniffi_build = { path = "crates/lera_uniffi_build", version = "0.1.0" }
+
+# External dependencies
+syn = { version = "2.0", features = ["full", "extra-traits"] }
+uniffi = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093", features = [
+    "cli",
+] }
+uniffi_bindgen = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093" }
+quote = "1.0"

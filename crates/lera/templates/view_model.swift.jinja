@@ -1,0 +1,88 @@
+import Observation
+
+{% for model in models %}
+// MARK: {{ model.model_name }}ViewModel
+
+extension {{ model.state_name }} {
+	public init() {
+		self = {{ model.default_state_fn }}()
+	}
+}
+
+@Observable
+@dynamicMemberLookup
+public final class {{ model.model_name }}ViewModel: @unchecked Sendable {
+	private var state: {{ model.state_name }}
+	@ObservationIgnored
+	private let model: {{ model.model_name }}
+	@ObservationIgnored
+	private let listener: {{ model.listener_name }}
+	
+	private init(state: {{ model.state_name }}, listener: {{ model.listener_name }}) {
+		self.state = state
+		self.listener = listener
+		self.model = {{ model.model_name }}(state: state, listener: listener)
+	}
+	
+	deinit {
+		print("Swift deinit {{ model.model_name }}ViewModel")
+	}
+	
+	public convenience init(state: {{ model.state_name }} = {{ model.state_name }}()) {
+		let listener = Listener()
+		self.init(state: state, listener: listener)
+		listener.add(forwarder: Listener.Forwarder { [weak self] newState in
+			print("Swift forwarder got new state")
+			self?.state = newState
+		})
+	}
+}
+
+// MARK: Listener
+extension {{ model.model_name }}ViewModel {
+	fileprivate final class Listener: {{ model.listener_name }}, @unchecked Sendable {
+
+		fileprivate struct Forwarder {
+			typealias OnStateChange = @Sendable ({{ model.state_name }}) -> Void
+			private let onStateChange: OnStateChange
+			init(_ onStateChange: @escaping OnStateChange) {
+				self.onStateChange = onStateChange
+			}
+			fileprivate func forward(_ state: {{ model.state_name }}) {
+				self.onStateChange(state)
+			}
+		}
+		
+		private var forwarder: Forwarder?
+		init() {}
+		
+		deinit {
+			print("Swift deinit {{ model.model_name }}ViewModel.Listener")
+		}
+		
+		fileprivate func add(forwarder: Forwarder) {
+			self.forwarder = forwarder
+		}
+		
+		// MARK: {{ model.listener_name }}
+		func onStateChange(state: {{ model.state_name }}) {
+			forwarder?.forward(state)
+		}
+	}
+}
+
+// MARK: @dynamicMemberLookup
+extension {{ model.model_name }}ViewModel {
+	public subscript<Subject>(dynamicMember keyPath: KeyPath<{{ model.state_name }}, Subject>) -> Subject {
+		self.state[keyPath: keyPath]
+	}
+}
+
+// MARK: Forward Actions from view to model (Rust)
+extension {{ model.model_name }}ViewModel {
+{% for method in model.methods %}
+{{ method }}
+{% endfor %}
+}
+
+{% endfor %}
