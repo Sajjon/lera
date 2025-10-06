@@ -95,7 +95,7 @@ This is done using several layers of "metaprogramming", Rust code ([procmacros](
 
 # Demo
 
-See demo / example in [`example`](example) folder.
+See demo / example in [`example`](example) folder, scroll down for video recording of SwiftUI and Android demo apps.
 
 ## Rust side
 
@@ -146,6 +146,9 @@ This is the simplest demo I've made, but I've also managed to create a backgroun
 Swift package can found in [`example/apple`](example/apple).
 
 ### App demo
+
+https://github.com/user-attachments/assets/beb65fc6-b913-4859-ab9b-adb32ccb3722
+
 SwiftUI example in [`example/apple/app`](example/apple/app) uses Swift package in [`example/apple`](example/apple) as a local dependency.
 
 This is how you use the by-`lera`-generated `CounterViewModel`:
@@ -285,6 +288,8 @@ Of course I've verified that there are no retain cycles between Swift and Rust, 
 Android/Kotlin works! Take a look at [`example/android`](example/android)
 
 ### App demo
+
+https://github.com/user-attachments/assets/0e14a029-8dab-490a-91a5-f4a2e9bfee96
 
 A simple Android app can be found in [`example/android/app`](example/android/app), which uses a kotlin package built by `lera` as a local dependency.
 
