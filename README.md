@@ -449,3 +449,6 @@ class CounterViewModel(
     }
 }
 ```
+
+# Etymology
+_Lera_ is a Swedish 🇸🇪 word meaning literally _"clay"_, however, it is short for two heteronyms: 🇸🇪 model-lera (verb) and 🇸🇪 modellera (noun), meaning "to model" and "modelling clay" respectively. So with _lera_ I mean both the verb and the noun! You model... ViewModels, using `lera` as modelling clay!
