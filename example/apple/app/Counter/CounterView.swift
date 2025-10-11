@@ -66,8 +66,24 @@ extension CounterView {
 }
 
 // MARK: Preview
+extension CounterState {
+	public static let previews: [Self] = newCounterStateSamples(n: 4)
+}
+
+extension CounterViewModel {
+	public static let previews: [CounterViewModel] = State.previews.map(CounterViewModel.init)
+}
+
+extension CounterView {
+	public typealias ViewModel = CounterViewModel
+	public typealias State = ViewModel.State
+}
 
 #Preview {
-	CounterView()
-		.frame(minWidth: 300, minHeight: 200)
+	VStack {
+		ForEach(CounterView.State.previews, id: \.self) {
+			CounterView(model: CounterViewModel(state: $0))
+		}
+	}
+	.frame(minHeight: 800)
 }

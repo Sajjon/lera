@@ -13,6 +13,7 @@ android {
     }
 
     sourceSets["main"].kotlin.srcDir("src/main/kotlin")
+    sourceSets["test"].kotlin.srcDir("src/test/kotlin")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -36,4 +37,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("net.java.dev.jna:jna:5.13.0@aar")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("net.java.dev.jna:jna:5.13.0")
 }

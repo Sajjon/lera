@@ -1,6 +1,6 @@
 mod example
+mod rust 'crates'
 
-# Default recipe (runs when you just type `just`)
 default: example::default
 
 swift-format: example::swift-format

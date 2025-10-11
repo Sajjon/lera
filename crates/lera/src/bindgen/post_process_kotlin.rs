@@ -21,6 +21,7 @@ struct KotlinModelInfo {
     state_name: String,
     listener_name: String,
     default_state_fn: String,
+    samples_state_fn: String,
     methods: Vec<String>,
 }
 
@@ -96,6 +97,7 @@ fn build_model_info(model: &ParsedModel) -> Result<KotlinModelInfo, String> {
         state_name: model.state_name.clone(),
         listener_name: model.listener_name.clone(),
         default_state_fn: model.default_state_fn.clone(),
+        samples_state_fn: model.samples_state_fn.clone(),
         methods,
     })
 }

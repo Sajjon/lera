@@ -5,7 +5,14 @@
     @dynamicMemberLookup
     final class SimpleListener: CounterStateChangeListener, @unchecked Sendable {
         private(set) var state: CounterState
-        init(state: CounterState = .init(count: 10, isAutoIncrementing: true, autoIncrementIntervalMs: 1)) {
+        
+        init(
+            state: CounterState = .init(
+                count: 10, 
+                isAutoIncrementing: true, 
+                autoIncrementIntervalMs: Interval(ms: 1)
+            )
+        ) {
             self.state = state
         }
 
@@ -59,6 +66,11 @@
             forwardingModel.resetButtonTapped()
             let count = stateListener.count
             assert(count == 0)
+            let debugDescription = forwardingModel.debugDescription
+            print("Swift: debugDescription:\n\n\(debugDescription)\n\n")
+            assert(debugDescription == "CounterState { count: 0, is_auto_incrementing: false, auto_increment_interval_ms: Interval { ms: 1 } }", "Expected debugDescription to reference CounterState but got \(debugDescription)")
+            let description = forwardingModel.description
+            assert(description == debugDescription, "Display fallback should match debug output when state lacks Display")
         }
 
         // Decrement

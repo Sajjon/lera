@@ -1,4 +1,8 @@
 {% for model in models %}
+fun {{ model.state_name }}.Companion.samples(n: kotlin.UByte): List<{{ model.state_name }}> {
+    return {{ model.samples_state_fn }}(n)
+}
+
 class {{ model.model_name }}ViewModel(
     state: {{ model.state_name }} = {{ model.default_state_fn }}()
 ) : androidx.lifecycle.ViewModel() {
@@ -19,6 +23,16 @@ class {{ model.model_name }}ViewModel(
     {{ method }}
 
 {% endfor %}
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is {{ model.model_name }}ViewModel) return false
+        return model == other.model
+    }
+
+    override fun hashCode(): Int = model.hashCode()
+
+    override fun toString(): String = model.toString()
+
     override fun onCleared() {
         super.onCleared()
         listener.clear()
@@ -40,5 +54,7 @@ class {{ model.model_name }}ViewModel(
         }
     }
 }
+
+typealias {{ model.model_name }}ViewModelState = {{ model.state_name }}
 
 {% endfor %}

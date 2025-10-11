@@ -1,5 +1,6 @@
 import uniffi.counters.Counter
 import uniffi.counters.CounterState
+import uniffi.counters.Interval
 import uniffi.counters.CounterStateChangeListener
 
 class SimpleListener(initialState: CounterState) : CounterStateChangeListener {
@@ -13,7 +14,7 @@ class SimpleListener(initialState: CounterState) : CounterStateChangeListener {
 
 fun main() {
     println("Kotlin: Counter bindings test start")
-    val initial = CounterState(count = 10L, isAutoIncrementing = true, autoIncrementIntervalMs = 1uL)
+    val initial = CounterState(count = 10L, isAutoIncrementing = true, autoIncrementIntervalMs = Interval(ms = 1uL))
     val listener = SimpleListener(initial)
     val model = Counter(initial, listener)
 
@@ -25,6 +26,8 @@ fun main() {
 
     model.resetButtonTapped()
     check(listener.state.count == 0L) { "Reset should zero the count" }
+    val description = model.toString()
+    check(description == "CounterState { count: 0, is_auto_incrementing: false, auto_increment_interval_ms: Interval { ms: 1 } }") { "Invalid description, got: $description" }
 
     model.decrementButtonTapped()
     check(listener.state.count == -1L) { "Decrement should reduce count" }

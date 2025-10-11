@@ -15,45 +15,66 @@ repos:
         types: [file, rust]
         entry: cargo fmt -- --check
         pass_filenames: false
+
       - id: swift fmt check
         name: swift fmt check
         language: system
         types: [file, rust]
         entry: just swift-format-check
         pass_filenames: false
+
       - id: clippy lib
         name: clippy lib
         language: system
         types: [file, rust]
         entry: cargo clippy --all -- -D warnings
         pass_filenames: false
+
       - id: clippy example
         name: clippy example
         language: system
         types: [file, rust]
         entry: cargo clippy --manifest-path example/rust/Cargo.toml --all -- -D warnings
         pass_filenames: false
+
       - id: doc tests
         name: doc tests
         language: system
         types: [file, rust]
         entry: cargo test --doc
         pass_filenames: false
+
       - id: unit tests
         name: unit tests
         language: system
         types: [file, rust]
-        entry: cargo nextest run --all
+        entry: just rust::test
         pass_filenames: false
+
+      - id: example unit tests rust
+        name: example unit tests rust
+        language: system
+        always_run: true
+        entry: just example::rust::unit-test
+        pass_filenames: false
+
+      - id: example bindgen tests rust
+        name: example bindgen tests rust
+        language: system
+        always_run: true
+        entry: just example::rust::bindgen-test
+        pass_filenames: false
+
       - id: example generate swift and test
         name: example generate swift and test
         language: system
         always_run: true
         entry: just example::apple::build-package-test
         pass_filenames: false
-      - id: example unit tests rust
-        name: example unit tests
+
+      - id: example generate kotlin and test
+        name: example generate kotlin and test
         language: system
-        types: [file, rust]
-        entry: just example::rust::test
+        always_run: true
+        entry: just example::android::build-package-test
         pass_filenames: false

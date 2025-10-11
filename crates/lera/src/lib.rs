@@ -2,11 +2,44 @@ mod bindgen;
 pub use bindgen::{build_android, build_swift};
 pub use lera_macros::{api, default_params, model, state};
 pub use lera_uniffi_build::{AndroidBuildSettings, AndroidTarget, SwiftBuildSettings};
-
+pub use samples_core::Samples;
 use std::sync::{Arc, RwLock};
 
-pub trait ModelState: std::fmt::Debug + Clone + PartialEq + Default {}
-impl<T: std::fmt::Debug + Clone + PartialEq + Default> ModelState for T {}
+pub mod fmt_utils {
+    use core::fmt;
+
+    trait DisplayOrDebug<'a, T: ?Sized> {
+        fn fmt(self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
+    }
+
+    impl<'a, T> DisplayOrDebug<'a, T> for &'a T
+    where
+        T: fmt::Display + ?Sized,
+    {
+        fn fmt(self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            fmt::Display::fmt(self, f)
+        }
+    }
+
+    impl<'a, T> DisplayOrDebug<'a, T> for &'a &'a T
+    where
+        T: fmt::Debug + ?Sized,
+    {
+        fn fmt(self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            fmt::Debug::fmt(*self, f)
+        }
+    }
+
+    pub fn fmt_model_state<T>(state: &T, f: &mut fmt::Formatter<'_>) -> fmt::Result
+    where
+        T: fmt::Debug,
+    {
+        DisplayOrDebug::fmt(&state, f)
+    }
+}
+
+pub trait ModelState: std::fmt::Debug + Clone + PartialEq + Default + Samples {}
+impl<T: std::fmt::Debug + Clone + PartialEq + Default + Samples> ModelState for T {}
 
 /// Macro to generate the boilerplate implementation to bridge UniFFI traits to StateChangeListener
 #[macro_export]
@@ -46,12 +79,20 @@ pub trait LeraModel {
     fn get_state_guard(&self) -> &Arc<RwLock<Self::State>>;
 
     fn access<R: Clone>(&self, access: impl FnOnce(Self::State) -> R) -> R {
-        access(self.get_state_guard().try_read().unwrap().clone())
+        access(
+            self.get_state_guard()
+                .read()
+                .expect("LeraModel::access failed to acquire read lock")
+                .clone(),
+        )
     }
 
     fn mutate<R>(&self, mutate: impl FnOnce(&mut Self::State) -> R) -> R {
         let (out, should_notify, new_state) = {
-            let mut write_guard = self.get_state_guard().try_write().unwrap();
+            let mut write_guard = self
+                .get_state_guard()
+                .write()
+                .expect("LeraModel::mutate failed to acquire write lock");
             let prev_state = write_guard.clone();
             let out = mutate(&mut write_guard);
             let new_state = write_guard.clone();

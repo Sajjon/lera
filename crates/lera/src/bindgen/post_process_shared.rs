@@ -52,6 +52,7 @@ pub struct ParsedModel {
     pub state_name: String,
     pub listener_name: String,
     pub default_state_fn: String,
+    pub samples_state_fn: String,
     pub methods: Vec<ParsedMethod>,
     pub source_path: PathBuf,
 }
@@ -77,6 +78,13 @@ pub fn to_camel_case(snake_case: &str) -> String {
 pub fn to_default_state_fn_name(state_name: &str) -> String {
     let mut result = "newDefault".to_string();
     result.push_str(state_name);
+    result
+}
+
+pub fn to_samples_state_fn_name(state_name: &str) -> String {
+    let mut result = "new".to_string();
+    result.push_str(state_name);
+    result.push_str("Samples");
     result
 }
 
@@ -350,6 +358,7 @@ fn collect_model_info(
         state_name: state_name.to_string(),
         listener_name,
         default_state_fn: to_default_state_fn_name(state_name),
+        samples_state_fn: to_samples_state_fn_name(state_name),
         methods,
         source_path: file_path.to_path_buf(),
     })

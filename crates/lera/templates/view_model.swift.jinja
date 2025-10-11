@@ -7,6 +7,10 @@ extension {{ model.state_name }} {
 	public init() {
 		self = {{ model.default_state_fn }}()
 	}
+
+	public static func samples(n: UInt8) -> [Self] {
+		{{ model.samples_state_fn }}(n: n)
+	}
 }
 
 @Observable
@@ -14,7 +18,7 @@ extension {{ model.state_name }} {
 public final class {{ model.model_name }}ViewModel: @unchecked Sendable {
 	private var state: {{ model.state_name }}
 	@ObservationIgnored
-	private let model: {{ model.model_name }}
+	fileprivate let model: {{ model.model_name }}
 	@ObservationIgnored
 	private let listener: {{ model.listener_name }}
 	
@@ -83,6 +87,34 @@ extension {{ model.model_name }}ViewModel {
 {% for method in model.methods %}
 {{ method }}
 {% endfor %}
+}
+
+extension {{ model.model_name }}ViewModel {
+	public typealias State = {{ model.state_name }}
+}
+
+// MARK: Equatable
+extension {{ model.model_name }}ViewModel: Equatable {
+	public static func ==(lhs: {{ model.model_name }}ViewModel, rhs: {{ model.model_name }}ViewModel) -> Bool {
+		lhs.model == rhs.model
+	}
+}
+
+// MARK: Hashable
+extension {{ model.model_name }}ViewModel: Hashable {
+	public func hash(into hasher: inout Hasher) {
+		hasher.combine(model)
+	}
+}
+
+// MARK: CustomStringConvertible
+extension {{ model.model_name }}ViewModel: CustomStringConvertible {
+	public var description: String { model.description }
+}
+
+// MARK: CustomDebugStringConvertible
+extension {{ model.model_name }}ViewModel: CustomDebugStringConvertible {
+	public var debugDescription: String { model.debugDescription }
 }
 
 {% endfor %}

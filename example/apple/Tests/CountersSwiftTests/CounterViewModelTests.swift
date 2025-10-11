@@ -11,6 +11,29 @@ import XCTest
 
 @Suite("CounterViewModelTests")
 struct CounterViewModelTests {
+	
+	
+	@Test("state stamples", arguments: 0 ... 10)
+	func stateSamples(n: UInt8) {
+		let samples = CounterState.samples(n: n)
+		#expect(samples.count == n)
+	}
+	
+	@Test("increment once")
+	func incrementOnce() {
+		let counter = CounterViewModel(
+			state: CounterState(
+				count: 0,
+				isAutoIncrementing: false,
+				autoIncrementIntervalMs: Interval(ms: 1)
+			)
+		)
+		
+		#expect(counter.count == 0)
+		counter.incrementButtonTapped()
+		#expect(counter.count == 1)
+	}
+	
 	@Test("all")
 	func all() async throws {
 		let initialCount: Int64 = 10
@@ -22,7 +45,7 @@ struct CounterViewModelTests {
 			state: CounterState(
 				count: initialCount,
 				isAutoIncrementing: true,
-				autoIncrementIntervalMs: 1
+				autoIncrementIntervalMs: Interval(ms: 1)
 			)
 		)
 
@@ -47,5 +70,34 @@ struct CounterViewModelTests {
 		counter.startAutoIncrementingButtonTapped()
 		try await sleep()
 		expectCountWithTolerance(expected: 3 * initialCount)
+	}
+
+	@Test("CustomStringConvertible & CustomDebugStringConvertible")
+	func customStringAndDebugStringConvertible() {
+		let sut = CounterViewModel(state: .init(count: 42, isAutoIncrementing: false, autoIncrementIntervalMs: Interval(ms: 1)))
+		#expect(sut.description == "CounterState { count: 42, is_auto_incrementing: false, auto_increment_interval_ms: Interval { ms: 1 } }")
+		#expect(sut.debugDescription == "CounterState { count: 42, is_auto_incrementing: false, auto_increment_interval_ms: Interval { ms: 1 } }")
+		
+	}
+	
+	@Test("equatable & hashable")
+	func equatableAndHashable() {
+		
+		let baseState = CounterState(count: 0, isAutoIncrementing: false, autoIncrementIntervalMs: Interval(ms: 1000))
+
+		let instance = CounterViewModel(state: baseState)
+		let another = CounterViewModel(state: baseState)
+		let different = CounterViewModel(state: CounterState(count: 42, isAutoIncrementing: false, autoIncrementIntervalMs: Interval(ms: 1)))
+
+		#expect(instance == another)
+		#expect(instance != different)
+
+		let set = Set([instance])
+		#expect(set.contains(instance))
+		#expect(set.contains(another))
+		#expect(!set.contains(different))
+		
+		let otherSet = Set([instance, another, different])
+		#expect(otherSet.count == 2)
 	}
 }
