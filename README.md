@@ -547,6 +547,9 @@ pub trait StateChangeListener: Send + Sync + 'static {
 
 Lera optionally integrates with a tiny sampling framework to generate test/demo values for your state types. This is useful for previews, fixtures, and for generating platform-side lists of sample states for rapid UI iteration.
 
+> [!NOTE]
+> Samples are **deterministic** (unlike [Dummy](https://crates.io/crates/dummy) / [Fake](https://crates.io/crates/fake) crates)
+
 There are two pieces:
 
 -   Trait and core impls: `samples_core::Samples` defines how to enumerate a small set of representative values for a type (e.g., integers, strings, collections). Many Rust standard/container types already implement it.
@@ -567,7 +570,7 @@ Example: when all fields are already sampleable
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[lera::state(samples)]
 pub struct ManualOnlyCounterState {
-        pub count: i64,
+    pub count: i64,
 }
 ```
 
@@ -596,22 +599,22 @@ The `path::to_fn` **must** be a `const fn` that returns `Result<Type, E>` or `Ty
 Complete example with a non-sampleable field type:
 
 ```rust
-// Can **optionally** `#[derive(Samples)]`
+// Can optionally `#[derive(Samples)]`
 pub struct Interval { ms: u64 }
 
 impl Interval {
-        pub const fn const_try_from(value: u64) -> Result<Self, &'static str> {
-                if value == 0 { Err("Interval must be non-zero") } else { Ok(Interval { ms: value }) }
-        }
+    pub const fn const_try_from(value: u64) -> Result<Self, &'static str> {
+        if value == 0 { Err("Interval must be non-zero") } else { Ok(Interval { ms: value }) }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[lera::state(samples)]
 pub struct CounterState {
-        pub count: i64,
-        pub is_auto_incrementing: bool,
-        #[samples([500, 1000] -> Interval::const_try_from)]
-        pub auto_increment_interval_ms: Interval,
+    pub count: i64,
+    pub is_auto_incrementing: bool,
+    #[samples([500, 1000] -> Interval::const_try_from)]
+    pub auto_increment_interval_ms: Interval,
 }
 ```
 
@@ -650,7 +653,8 @@ ViewModels from them.
 > This was not the case for earlier versions of Xcode.
 
 ### Demo
-
+Demo of usage of `samples` on ViewModels with SwiftUI
+https://github.com/user-attachments/assets/fea8c1d2-49ea-4204-9bb5-80c30cf94c9b
 
 ## API surface recap
 
