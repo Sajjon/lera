@@ -57,6 +57,8 @@ Write ViewModels for SwiftUI and Jetpack Compose **only in Rust**, powered by [M
     - [Opting in for a state](#opting-in-for-a-state)
     - [Custom samples](#custom-samples)
     - [How derived Samples are combined](#how-derived-samples-are-combined)
+    - [Usage on Swift/Kotlin side](#usage-on-swiftkotlin-side)
+        - [Demo](#demo-1)
     - [API surface recap](#api-surface-recap)
     - [Notes and tips](#notes-and-tips)
 - [Etymology](#etymology)
@@ -654,6 +656,7 @@ ViewModels from them.
 
 ### Demo
 Demo of usage of `samples` on ViewModels with SwiftUI
+
 https://github.com/user-attachments/assets/fea8c1d2-49ea-4204-9bb5-80c30cf94c9b
 
 ## API surface recap
