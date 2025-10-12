@@ -1,13 +1,32 @@
 {% for model in models %}
+{% if model.enable_samples %}
+fun {{ model.state_name }}.Companion.samples(n: kotlin.UByte): List<{{ model.state_name }}> {
+    return {{ model.samples_state_fn }}(n)
+}
+{% endif %}
+
 class {{ model.model_name }}ViewModel(
     state: {{ model.state_name }} = {{ model.default_state_fn }}()
 ) : androidx.lifecycle.ViewModel() {
 
     private val listener = Listener()
     private val model = {{ model.model_name }}(state, listener)
+    private val identity: Int = System.identityHashCode(model)
     private val _uiState = kotlinx.coroutines.flow.MutableStateFlow(state)
     val uiState: kotlinx.coroutines.flow.StateFlow<{{ model.state_name }}> =
         _uiState.asStateFlow()
+
+    companion object {
+        {% if model.enable_samples %}
+        // Samples convenience for ViewModel
+        @JvmStatic
+        fun samples(n: kotlin.UByte): List<{{ model.model_name }}ViewModel> {
+            return {{ model.model_name }}ViewModelState
+                .samples(n)
+                .map { {{ model.model_name }}ViewModel(it) }
+        }
+        {% endif %}
+    }
 
     init {
         listener.addForwarder { newState ->
@@ -19,6 +38,16 @@ class {{ model.model_name }}ViewModel(
     {{ method }}
 
 {% endfor %}
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is {{ model.model_name }}ViewModel) return false
+        return this.model === other.model
+    }
+
+    override fun hashCode(): Int = identity
+
+    override fun toString(): String = model.toString()
+
     override fun onCleared() {
         super.onCleared()
         listener.clear()
@@ -41,4 +70,5 @@ class {{ model.model_name }}ViewModel(
     }
 }
 
+typealias {{ model.model_name }}ViewModelState = {{ model.state_name }}
 {% endfor %}

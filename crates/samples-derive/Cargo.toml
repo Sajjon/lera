@@ -1,7 +1,7 @@
 [package]
-name = "lera_macros"
+name = "samples-derive"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [lib]
 proc-macro = true
@@ -9,10 +9,8 @@ proc-macro = true
 [dependencies]
 # Internal dependencies
 samples-core.workspace = true
-samples-derive.workspace = true
 
 # External dependencies
-heck = "0.4"                 # for Case conversion
 proc-macro2.workspace = true
 quote.workspace = true
 syn.workspace = true

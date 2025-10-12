@@ -1,6 +1,11 @@
 default: test
 
-test: 
+test: unit-test bindgen-test
+
+unit-test: 
+  cargo test --lib
+
+bindgen-test: 
   CLASSPATH="$(pwd)/../android/jars/jna.jar:$(pwd)/../android/jars/kotlinx-coroutines-core-jvm.jar" cargo test
 
 clean: 

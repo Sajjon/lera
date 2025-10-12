@@ -139,6 +139,7 @@ pub enum HashStateError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::counter::Interval;
 
     #[allow(clippy::approx_constant)]
     #[actix_rt::test]
@@ -171,7 +172,7 @@ mod tests {
                 Some(CounterState {
                     count: 100,
                     is_auto_incrementing: true,
-                    auto_increment_interval_ms: 500,
+                    auto_increment_interval_ms: Interval::try_from(500).unwrap(),
                 }),
                 [
                     (
@@ -181,7 +182,7 @@ mod tests {
                                 Some(CounterState {
                                     count: 5,
                                     is_auto_incrementing: false,
-                                    auto_increment_interval_ms: 250,
+                                    auto_increment_interval_ms: Interval::try_from(250).unwrap(),
                                 }),
                                 None,
                             ]),

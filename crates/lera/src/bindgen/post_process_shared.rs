@@ -52,6 +52,8 @@ pub struct ParsedModel {
     pub state_name: String,
     pub listener_name: String,
     pub default_state_fn: String,
+    pub samples_state_fn: String,
+    pub enable_samples: bool,
     pub methods: Vec<ParsedMethod>,
     pub source_path: PathBuf,
 }
@@ -77,6 +79,13 @@ pub fn to_camel_case(snake_case: &str) -> String {
 pub fn to_default_state_fn_name(state_name: &str) -> String {
     let mut result = "newDefault".to_string();
     result.push_str(state_name);
+    result
+}
+
+pub fn to_samples_state_fn_name(state_name: &str) -> String {
+    let mut result = "new".to_string();
+    result.push_str(state_name);
+    result.push_str("Samples");
     result
 }
 
@@ -243,6 +252,7 @@ fn collect_model_info(
     let listener_name = format!("{}ChangeListener", state_name);
     let mut found_state_struct = false;
     let mut found_api_impl = false;
+    let mut enable_samples = false;
     let mut methods = Vec::new();
 
     for item in &syntax_tree.items {
@@ -261,6 +271,15 @@ fn collect_model_info(
                             "ACTIONABLE ERROR: state struct {} must use #[lera::state] in {:?}",
                             state_name, file_path
                         ));
+                    }
+                    // Determine whether #[lera::state] had the optional `samples` argument.
+                    if let Some(attr) = attrs.iter().find(|a| attr_is_lera(a, "state")) {
+                        // If args exist and are `samples`, mark enabled; otherwise false.
+                        if let Ok(ident) = attr.parse_args::<syn::Ident>() {
+                            if ident == "samples" {
+                                enable_samples = true;
+                            }
+                        }
                     }
                     found_state_struct = true;
                 }
@@ -350,6 +369,8 @@ fn collect_model_info(
         state_name: state_name.to_string(),
         listener_name,
         default_state_fn: to_default_state_fn_name(state_name),
+        samples_state_fn: to_samples_state_fn_name(state_name),
+        enable_samples,
         methods,
         source_path: file_path.to_path_buf(),
     })

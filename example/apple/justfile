@@ -13,6 +13,12 @@ build-package:
    --maconly \
    --apple-sources-dir apple/Sources/UniFFI
 
+build-package-with-ios:
+  cargo run \
+   --manifest-path ../rust/Cargo.toml \
+   --bin apple-build -- \
+   --apple-sources-dir apple/Sources/UniFFI
+
 test-package:
   swift test
 

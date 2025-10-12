@@ -8,13 +8,21 @@ use syn::{
 
 #[proc_macro_attribute]
 pub fn state(attr: TokenStream, item: TokenStream) -> TokenStream {
-    if !attr.is_empty() {
-        return syn::Error::new_spanned(
-            proc_macro2::TokenStream::from(attr),
-            "`#[lera::state]` does not accept arguments",
-        )
-        .to_compile_error()
-        .into();
+    // Optional argument: `samples` to also derive samples and export sample constructor.
+    let attr_ts = proc_macro2::TokenStream::from(attr);
+    let mut enable_samples = false;
+    let attr_trimmed = attr_ts.to_string().replace(' ', "");
+    if !attr_trimmed.is_empty() {
+        if attr_trimmed == "samples" {
+            enable_samples = true;
+        } else {
+            return syn::Error::new_spanned(
+                attr_ts,
+                "`#[lera::state]` only supports optional `samples` argument, e.g. #[lera::state(samples)]",
+            )
+            .to_compile_error()
+            .into();
+        }
     }
 
     let mut item_struct = parse_macro_input!(item as ItemStruct);
@@ -24,26 +32,61 @@ pub fn state(attr: TokenStream, item: TokenStream) -> TokenStream {
         return err.to_compile_error().into();
     }
 
+    if enable_samples {
+        let samples_path = parse_path("samples_derive::Samples");
+        if let Err(err) = ensure_derive(&mut item_struct.attrs, &samples_path) {
+            return err.to_compile_error().into();
+        }
+    }
+
     let struct_ident = item_struct.ident.clone();
     let struct_vis = item_struct.vis.clone();
 
-    let fn_name = format_ident!("new_default_{}", struct_ident.to_string().to_snake_case());
+    let fn_name_new_default =
+        format_ident!("new_default_{}", struct_ident.to_string().to_snake_case());
     let listener_ident = format_ident!("{}ChangeListener", struct_ident);
+    let fn_name_new_samples =
+        format_ident!("new_{}_samples", struct_ident.to_string().to_snake_case());
 
-    let expanded = quote! {
-        #item_struct
+    let expanded = if enable_samples {
+        quote! {
+            #item_struct
 
-        #[uniffi::export]
-        #struct_vis fn #fn_name() -> #struct_ident {
-            #struct_ident::default()
+            #[uniffi::export]
+            #struct_vis fn #fn_name_new_default() -> #struct_ident {
+                #struct_ident::default()
+            }
+
+            // Export a sample-constructor function only when Samples is enabled for this state.
+            #[uniffi::export]
+            #struct_vis fn #fn_name_new_samples(n: u8) -> Vec<#struct_ident> {
+                use samples_core::Samples;
+                #struct_ident::sample_vec_n(n)
+            }
+
+            #[uniffi::export(with_foreign)]
+            #struct_vis trait #listener_ident: Send + Sync {
+                fn on_state_change(&self, state: #struct_ident);
+            }
+
+            ::lera::impl_state_change_listener_bridge!(#listener_ident, #struct_ident);
         }
+    } else {
+        quote! {
+            #item_struct
 
-        #[uniffi::export(with_foreign)]
-        #struct_vis trait #listener_ident: Send + Sync {
-            fn on_state_change(&self, state: #struct_ident);
+            #[uniffi::export]
+            #struct_vis fn #fn_name_new_default() -> #struct_ident {
+                #struct_ident::default()
+            }
+
+            #[uniffi::export(with_foreign)]
+            #struct_vis trait #listener_ident: Send + Sync {
+                fn on_state_change(&self, state: #struct_ident);
+            }
+
+            ::lera::impl_state_change_listener_bridge!(#listener_ident, #struct_ident);
         }
-
-        ::lera::impl_state_change_listener_bridge!(#listener_ident, #struct_ident);
     };
 
     expanded.into()
@@ -120,6 +163,22 @@ pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
             .ident
             .as_ref()
             .map(|name| name == "background_task")
+            .unwrap_or(false)
+    });
+
+    let has_non_eq_field = user_fields.iter().any(|field| {
+        field
+            .ident
+            .as_ref()
+            .map(|name| name == "non_eq")
+            .unwrap_or(false)
+    });
+
+    let has_non_hash_field = user_fields.iter().any(|field| {
+        field
+            .ident
+            .as_ref()
+            .map(|name| name == "non_hash")
             .unwrap_or(false)
     });
 
@@ -215,6 +274,193 @@ pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
+    let eq_impl_tokens = if !has_non_eq_field {
+        let eq_checks: Vec<proc_macro2::TokenStream> = user_fields
+            .iter()
+            .map(|field| {
+                let ident = field
+                    .ident
+                    .as_ref()
+                    .expect("named field must have ident")
+                    .clone();
+                quote! { ::core::cmp::PartialEq::eq(&self.#ident, &other.#ident) }
+            })
+            .collect();
+
+        let state_compare = quote! {
+            {
+                if ::std::sync::Arc::ptr_eq(&self.state, &other.state) {
+                    true
+                } else {
+                    let self_ptr = ::std::sync::Arc::as_ptr(&self.state) as usize;
+                    let other_ptr = ::std::sync::Arc::as_ptr(&other.state) as usize;
+                    if self_ptr < other_ptr {
+                        let self_state = self.state.read().unwrap();
+                        let other_state = other.state.read().unwrap();
+                        *self_state == *other_state
+                    } else if self_ptr > other_ptr {
+                        let other_state = other.state.read().unwrap();
+                        let self_state = self.state.read().unwrap();
+                        *self_state == *other_state
+                    } else {
+                        let self_state = self.state.read().unwrap();
+                        let other_state = other.state.read().unwrap();
+                        *self_state == *other_state
+                    }
+                }
+            }
+        };
+
+        let mut partial_eq_generics = item_struct.generics.clone();
+        {
+            let where_clause = partial_eq_generics.make_where_clause();
+            where_clause
+                .predicates
+                .push(syn::parse_quote! { #state_ty: ::core::cmp::PartialEq });
+            for field in &user_fields {
+                let ty = &field.ty;
+                where_clause
+                    .predicates
+                    .push(syn::parse_quote! { #ty: ::core::cmp::PartialEq });
+            }
+        }
+        let (partial_eq_impl_generics, partial_eq_ty_generics, partial_eq_where_clause) =
+            partial_eq_generics.split_for_impl();
+
+        let mut eq_generics = item_struct.generics.clone();
+        {
+            let where_clause = eq_generics.make_where_clause();
+            where_clause
+                .predicates
+                .push(syn::parse_quote! { #state_ty: ::core::cmp::Eq });
+            for field in &user_fields {
+                let ty = &field.ty;
+                where_clause
+                    .predicates
+                    .push(syn::parse_quote! { #ty: ::core::cmp::Eq });
+            }
+        }
+        let (eq_impl_generics, eq_ty_generics, eq_where_clause) = eq_generics.split_for_impl();
+
+        quote! {
+            impl #partial_eq_impl_generics ::core::cmp::PartialEq for #struct_ident #partial_eq_ty_generics #partial_eq_where_clause {
+                fn eq(&self, other: &Self) -> bool {
+                    let state_equal = #state_compare;
+                    state_equal
+                        #(&& #eq_checks)*
+                }
+            }
+
+            impl #eq_impl_generics ::core::cmp::Eq for #struct_ident #eq_ty_generics #eq_where_clause {}
+        }
+    } else {
+        proc_macro2::TokenStream::new()
+    };
+
+    let hash_impl_tokens = if !has_non_hash_field {
+        let hash_statements: Vec<proc_macro2::TokenStream> = user_fields
+            .iter()
+            .map(|field| {
+                let ident = field
+                    .ident
+                    .as_ref()
+                    .expect("named field must have ident")
+                    .clone();
+                quote! { ::std::hash::Hash::hash(&self.#ident, state); }
+            })
+            .collect();
+
+        let mut hash_generics = item_struct.generics.clone();
+        {
+            let where_clause = hash_generics.make_where_clause();
+            where_clause
+                .predicates
+                .push(syn::parse_quote! { #state_ty: ::std::hash::Hash });
+            for field in &user_fields {
+                let ty = &field.ty;
+                where_clause
+                    .predicates
+                    .push(syn::parse_quote! { #ty: ::std::hash::Hash });
+            }
+        }
+        let (hash_impl_generics, hash_ty_generics, hash_where_clause) =
+            hash_generics.split_for_impl();
+
+        quote! {
+            impl #hash_impl_generics ::std::hash::Hash for #struct_ident #hash_ty_generics #hash_where_clause {
+                fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+                    {
+                        let state_guard = self.state.read().unwrap();
+                        ::std::hash::Hash::hash(&*state_guard, state);
+                    }
+                    #(#hash_statements)*
+                }
+            }
+        }
+    } else {
+        proc_macro2::TokenStream::new()
+    };
+
+    let mut debug_generics = item_struct.generics.clone();
+    {
+        let where_clause = debug_generics.make_where_clause();
+        where_clause
+            .predicates
+            .push(syn::parse_quote! { #state_ty: ::core::fmt::Debug });
+    }
+    let (debug_impl_generics, debug_ty_generics, debug_where_clause) =
+        debug_generics.split_for_impl();
+
+    let debug_impl_tokens = quote! {
+        impl #debug_impl_generics ::core::fmt::Debug for #struct_ident #debug_ty_generics #debug_where_clause {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                let state = self
+                    .state
+                    .read()
+                    .expect("LeraModel::Debug failed to acquire read lock");
+                ::core::fmt::Debug::fmt(&*state, f)
+            }
+        }
+    };
+
+    let mut display_generics = item_struct.generics.clone();
+    {
+        let where_clause = display_generics.make_where_clause();
+        where_clause
+            .predicates
+            .push(syn::parse_quote! { #state_ty: ::core::fmt::Debug });
+    }
+    let (display_impl_generics, display_ty_generics, display_where_clause) =
+        display_generics.split_for_impl();
+
+    let display_impl_tokens = quote! {
+        impl #display_impl_generics ::core::fmt::Display for #struct_ident #display_ty_generics #display_where_clause {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                let state = self
+                    .state
+                    .read()
+                    .expect("LeraModel::Display failed to acquire read lock");
+                ::lera::fmt_utils::fmt_model_state(&*state, f)
+            }
+        }
+    };
+
+    if !has_non_eq_field && !has_non_hash_field {
+        let export_path = parse_path("uniffi::export");
+        let has_export_attr = item_struct
+            .attrs
+            .iter()
+            .any(|attr| attr.path() == &export_path);
+        if !has_export_attr {
+            item_struct.attrs.push(syn::parse_quote!(#[uniffi::export(
+                Eq,
+                Hash,
+                Debug,
+                Display
+            )]));
+        }
+    }
+
     let expanded = quote! {
         #item_struct
 
@@ -250,6 +496,11 @@ pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
                 &self.state
             }
         }
+
+        #eq_impl_tokens
+        #hash_impl_tokens
+        #debug_impl_tokens
+        #display_impl_tokens
     };
 
     expanded.into()

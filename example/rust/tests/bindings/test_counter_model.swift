@@ -5,7 +5,14 @@
     @dynamicMemberLookup
     final class SimpleListener: CounterStateChangeListener, @unchecked Sendable {
         private(set) var state: CounterState
-        init(state: CounterState = .init(count: 10, isAutoIncrementing: true, autoIncrementIntervalMs: 1)) {
+        
+        init(
+            state: CounterState = .init(
+                count: 10, 
+                isAutoIncrementing: true, 
+                autoIncrementIntervalMs: Interval(ms: 1)
+            )
+        ) {
             self.state = state
         }
 
@@ -19,12 +26,21 @@
         }
     }
 
+    func test_samples() async throws {
+        print("Swift: do_test_samples start")
+        defer {
+            print("Swift: do_test_samples end")
+        }
+        let samples = newCounterStateSamples(n: 8)
+        assert(samples.count == 8)
+    }
+
     // This is a quite confusing unit test because the CounterModel does not holds
     // the state, the listener passed in receives it, so we have to query the listener
     // for the state, but we call methods on the `Counter` model, below called `forwardingModel`.
-//
+    //
     // Lera puts these two constructs in the one and same final class ViewModel.
-    func do_test() async throws {
+    func test_counter_model() async throws {
         print("Swift: do_test start")
         defer {
             print("Swift: do_test end")
@@ -59,6 +75,11 @@
             forwardingModel.resetButtonTapped()
             let count = stateListener.count
             assert(count == 0)
+            let debugDescription = forwardingModel.debugDescription
+            print("Swift: debugDescription:\n\n\(debugDescription)\n\n")
+            assert(debugDescription == "CounterState { count: 0, is_auto_incrementing: false, auto_increment_interval_ms: Interval { ms: 1 } }", "Expected debugDescription to reference CounterState but got \(debugDescription)")
+            let description = forwardingModel.description
+            assert(description == debugDescription, "Display fallback should match debug output when state lacks Display")
         }
 
         // Decrement
@@ -82,9 +103,13 @@
         group.enter()
 
         Task {
-            print("Swift: test_viewmodel.swift: launching do_test")
-            try! await do_test()
-            print("Swift: test_viewmodel.swift: do_test DONE => leaving group")
+            print("Swift: test_viewmodel.swift: launching test_counter_model")
+            try! await test_counter_model()
+            print("Swift: test_viewmodel.swift: test_counter_model DONE")
+            print("Swift: test_viewmodel.swift: launching test_samples")
+            try! await test_samples()
+            print("Swift: test_viewmodel.swift: test_samples DONE")
+            print("Swift: all tests DONE => leaving group")
             group.leave()
             print("Swift: test_viewmodel.swift: group left")
         }

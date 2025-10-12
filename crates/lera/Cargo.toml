@@ -7,6 +7,7 @@ edition = "2024"
 # Internal
 lera_macros.workspace = true
 lera_uniffi_build.workspace = true
+samples-core.workspace = true
 
 # External
 askama = "0.12"

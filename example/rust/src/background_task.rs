@@ -1,4 +1,8 @@
-use std::{sync::OnceLock, time::Duration};
+use std::{
+    hash::{Hash, Hasher},
+    sync::{Mutex, OnceLock},
+    time::Duration,
+};
 
 use tokio::runtime::{Builder, Runtime};
 
@@ -15,15 +19,24 @@ fn get_runtime() -> &'static Runtime {
     })
 }
 
-#[derive(Default)]
+/// Coordinates a cancellable task that is driven from Rust.
+///
+/// Equality and hashing treat all instances as identical so that models embedding a
+/// `BackgroundTask` can implement `Eq` and `Hash` even though the runtime task handle does not
+/// participate in those comparisons.
+#[derive(Default, Debug)]
 pub struct BackgroundTask {
+    inner: Mutex<BackgroundTaskInner>,
+}
+
+#[derive(Default, Debug)]
+struct BackgroundTaskInner {
     handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 pub type ShouldContinue = bool;
 
-// === PRIVATE API ===
-impl BackgroundTask {
+impl BackgroundTaskInner {
     fn do_start_background_task(
         interval_ms: Duration,
         tick: impl Fn() -> ShouldContinue + Send + 'static,
@@ -45,18 +58,14 @@ impl BackgroundTask {
         })
     }
 
-    pub fn is_running(&self) -> bool {
+    fn is_running(&self) -> bool {
         self.handle
             .as_ref()
             .map(|h| !h.is_finished())
             .unwrap_or(false)
     }
-}
 
-// === PUBLIC API ===
-impl BackgroundTask {
-
-    pub fn start<F>(&mut self, tick_interval_ms: Duration, tick: F)
+    fn start<F>(&mut self, tick_interval_ms: Duration, tick: F)
     where
         F: Fn() -> ShouldContinue + Send + 'static,
     {
@@ -64,9 +73,45 @@ impl BackgroundTask {
         self.handle = Some(Self::do_start_background_task(tick_interval_ms, tick));
     }
 
-    pub fn stop(&mut self) {
+    fn stop(&mut self) {
         if let Some(handle) = self.handle.take() {
             handle.abort();
         }
     }
+}
+
+// === PUBLIC API ===
+impl BackgroundTask {
+    pub fn is_running(&self) -> bool {
+        self.inner.lock().unwrap().is_running()
+    }
+
+    pub fn start<F>(&self, tick_interval_ms: Duration, tick: F)
+    where
+        F: Fn() -> ShouldContinue + Send + 'static,
+    {
+        self.inner
+            .lock()
+            .expect("BackgroundTask::start failed to acquire lock")
+            .start(tick_interval_ms, tick);
+    }
+
+    pub fn stop(&self) {
+        self.inner
+            .lock()
+            .expect("BackgroundTask::stop failed to acquire lock")
+            .stop();
+    }
+}
+
+impl PartialEq for BackgroundTask {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for BackgroundTask {}
+
+impl Hash for BackgroundTask {
+    fn hash<H: Hasher>(&self, _state: &mut H) {}
 }

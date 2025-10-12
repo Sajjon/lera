@@ -21,6 +21,8 @@ pub struct LeraModelInfo {
     pub state_name: String,
     pub listener_name: String,
     pub default_state_fn: String,
+    pub samples_state_fn: String,
+    pub enable_samples: bool,
     pub methods: Vec<String>,
 }
 
@@ -77,6 +79,8 @@ fn build_model_info(model: &ParsedModel) -> LeraModelInfo {
         state_name: model.state_name.clone(),
         listener_name: model.listener_name.clone(),
         default_state_fn: model.default_state_fn.clone(),
+        samples_state_fn: model.samples_state_fn.clone(),
+        enable_samples: model.enable_samples,
         methods,
     }
 }

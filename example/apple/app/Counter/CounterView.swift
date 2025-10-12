@@ -66,8 +66,10 @@ extension CounterView {
 }
 
 // MARK: Preview
-
 #Preview {
-	CounterView()
-		.frame(minWidth: 300, minHeight: 200)
+	VStack {
+		ForEach(CounterViewModel.samples(n: 3)) {
+			CounterView(model: $0)
+		}
+	}
 }

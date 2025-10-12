@@ -16,19 +16,26 @@ path = "src/android_build.rs"
 
 
 [dependencies]
+# Internal dependencies
 lera = { path = "../../crates/lera" }
+samples-core = { path = "../../crates/samples-core" }
+samples-derive = { path = "../../crates/samples-derive" }
 lera_uniffi_build = { path = "../../crates/lera_uniffi_build" }
-tokio = { version = "1", features = ["full"] }
-uniffi = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093" }
+
+# External dependencies
+clap = { version = "4.5", features = ["derive"] }
+derive_more = {version = "2.0", features = ["deref"] }
 paste = "1.0.15"
 thiserror = "2.0.17"
-clap = { version = "4.5", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+uniffi = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093" }
 
 [dev-dependencies]
 uniffi = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093", features = [
     "bindgen-tests",
 ] }
 actix-rt = "2.11.0"
+pretty_assertions = "1.4"
 
 [build-dependencies]
 uniffi = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093", features = [

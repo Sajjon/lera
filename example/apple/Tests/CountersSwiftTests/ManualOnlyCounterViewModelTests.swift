@@ -95,12 +95,12 @@ struct ManualOnlyCounterViewModelTests {
 			optionalOtherCustomRecord: CounterState(
 				count: 100,
 				isAutoIncrementing: true,
-				autoIncrementIntervalMs: 500,
+				autoIncrementIntervalMs: Interval(ms: 500),
 			),
 			deepMap: [
                 ManualOnlyCounterState(count: 1): [
                     .some([
-                        .some(CounterState(count: 5, isAutoIncrementing: false, autoIncrementIntervalMs: 250)),
+                        .some(CounterState(count: 5, isAutoIncrementing: false, autoIncrementIntervalMs: Interval(ms: 250))),
                         .none
                     ]),
                     .none

@@ -35,6 +35,13 @@ build-package:
 build-app:
   ./gradlew :app:assembleDebug
 
+test-package:
+  GRADLE_USER_HOME=$PWD/.gradle ./gradlew :lera:test --no-daemon
+
+build-package-test:
+  just build-package
+  just test-package
+
 clean:
   rm -rf build
   rm -rf app/build
