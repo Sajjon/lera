@@ -38,6 +38,33 @@ fn try_from_syntax_is_possible() {
 }
 
 #[test]
+fn samples_on_field_of_type_not_samples_work() {
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct NotSamples {
+        ms: u64,
+    }
+
+    impl NotSamples {
+        pub const fn const_try_from(value: u64) -> Result<Self, &'static str> {
+            if value == 0 {
+                Err("Interval must be non-zero")
+            } else {
+                Ok(Self { ms: value })
+            }
+        }
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, Hash, Samples)]
+    pub struct Wrapper {
+        #[samples([500, 1000] -> NotSamples::const_try_from)]
+        not_samples: NotSamples,
+    }
+
+    let samples = Wrapper::sample_vec();
+    assert_eq!(samples.len(), 2);
+}
+
+#[test]
 fn overrides_are_respected_in_nested_types() {
     #[derive(Samples, Clone, Debug, PartialEq)]
     struct WithoutOverrideLevel0 {
@@ -106,7 +133,7 @@ fn test_my_struct_cartesian_samples() {
     let samples = MyStruct::sample_vec();
     assert_eq!(
         samples.len(),
-        1 * 3 * 3 // one bool override, three i8 overrides, three strings
+        3 * 3 // one bool override, three i8 overrides, three strings
     );
 
     let expected = {

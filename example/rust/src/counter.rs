@@ -1,15 +1,13 @@
 use crate::background_task::BackgroundTask;
 use lera::LeraModel;
-use samples_derive::Samples;
 use std::{
     sync::{Arc, RwLock},
     time::Duration,
 };
 
 /// A non zero interval in milliseconds
-#[derive(Clone, Debug, PartialEq, Samples, Eq, Hash, uniffi::Record, derive_more::Deref)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, uniffi::Record, derive_more::Deref)]
 pub struct Interval {
-    #[samples([500, 1000] -> const_try_from)]
     ms: u64,
 }
 
@@ -41,10 +39,12 @@ impl Default for Interval {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[lera::state]
+#[lera::state(samples)]
 pub struct CounterState {
+    #[samples([-5, 0])]
     pub count: i64,
     pub is_auto_incrementing: bool,
+    #[samples([50, 500] -> Interval::const_try_from)]
     pub auto_increment_interval_ms: Interval,
 }
 impl Default for CounterState {
@@ -200,13 +200,71 @@ mod tests {
         assert!(output.contains("42"));
     }
 
-    use samples_core::Samples;
+       use samples_core::Samples;
     
     #[test]
-    fn try_from_syntax_is_possible() {
-        let samples: Vec<Interval> = Interval::sample_vec();
-        assert_eq!(samples.len(), 2);
-        assert_eq!(samples[0], Interval::const_try_from(500).unwrap());
-        assert_eq!(samples[1], Interval::const_try_from(1000).unwrap());
+    fn counter_state_samples() {
+        let samples = CounterState::sample_vec();
+        assert_eq!(samples.len(), 8);
+        pretty_assertions::assert_eq!(
+            samples,
+            vec![
+                CounterState {
+                    count: -5,
+                    is_auto_incrementing: true,
+                    auto_increment_interval_ms: Interval::try_from(50).unwrap(),
+                },
+                CounterState {
+                    count: -5,
+                    is_auto_incrementing: true,
+                    auto_increment_interval_ms: Interval::try_from(500).unwrap(),
+                },
+                CounterState {
+                    count: -5,
+                    is_auto_incrementing: false,
+                    auto_increment_interval_ms: Interval::try_from(50).unwrap(),
+                },
+                CounterState {
+                    count: -5,
+                    is_auto_incrementing: false,
+                    auto_increment_interval_ms: Interval::try_from(500).unwrap(),
+                },
+                CounterState {
+                    count: 0,
+                    is_auto_incrementing: true,
+                    auto_increment_interval_ms: Interval::try_from(50).unwrap(),
+                },
+                CounterState {
+                    count: 0,
+                    is_auto_incrementing: true,
+                    auto_increment_interval_ms: Interval::try_from(500).unwrap(),
+                },
+                CounterState {
+                    count: 0,
+                    is_auto_incrementing: false,
+                    auto_increment_interval_ms: Interval::try_from(50).unwrap(),
+                },
+                CounterState {
+                    count: 0,
+                    is_auto_incrementing: false,
+                    auto_increment_interval_ms: Interval::try_from(500).unwrap(),
+                },
+            ]
+        );
     }
+
+    #[test]
+    fn test_counter_hashable() {
+        let state_samples = CounterState::sample_vec();
+        let count = state_samples.len();
+        assert_eq!(count, 8);
+        let model_samples: Vec<Counter> = state_samples
+            .into_iter()
+            .map(|state| {
+                Counter::without_listener(state, BackgroundTask::default())
+            })
+            .collect();
+        assert_eq!(model_samples.len(), 8);
+    }
+
 }

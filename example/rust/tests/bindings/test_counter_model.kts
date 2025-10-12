@@ -2,6 +2,7 @@ import uniffi.counters.Counter
 import uniffi.counters.CounterState
 import uniffi.counters.Interval
 import uniffi.counters.CounterStateChangeListener
+import uniffi.counters.newCounterStateSamples
 
 class SimpleListener(initialState: CounterState) : CounterStateChangeListener {
     @Volatile
@@ -12,7 +13,7 @@ class SimpleListener(initialState: CounterState) : CounterStateChangeListener {
     }
 }
 
-fun main() {
+fun test_counter_model() {
     println("Kotlin: Counter bindings test start")
     val initial = CounterState(count = 10L, isAutoIncrementing = true, autoIncrementIntervalMs = Interval(ms = 1uL))
     val listener = SimpleListener(initial)
@@ -36,6 +37,18 @@ fun main() {
     check(listener.state.count == 0L) { "Increment should raise count" }
 
     println("Kotlin: Counter bindings test done")
+}
+
+fun test_samples() {
+    println("Kotlin: Samples test start")
+    val samples = newCounterStateSamples(n = 8u)
+    check(samples.size == 8) { "Expected 8 samples, got ${samples.size}" }
+    println("Kotlin: Samples test done")
+}
+
+fun main() {
+    test_counter_model()
+    test_samples()
 }
 
 main()

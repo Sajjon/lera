@@ -7,7 +7,9 @@ use syn::{parse_macro_input, Attribute, Data, DeriveInput, Expr, Fields, LitStr,
 #[derive(Clone)]
 enum CustomSample {
     Direct(Expr),
-    ConstFn { expr: Expr, method: syn::Ident },
+    // Function path that will be applied to the expr to construct the field value.
+    // Intended for const fns returning Result<#ty, E> (e.g., Interval::const_try_from(…)).
+    ConstFn { expr: Expr, method: syn::Path },
 }
 
 #[proc_macro_derive(Samples, attributes(samples))]
@@ -74,6 +76,39 @@ pub fn derive_samples(input: TokenStream) -> TokenStream {
     let mut index_idents = Vec::new();
     let mut len_idents = Vec::new();
 
+    // Special-case: single-field struct with constructor method overrides that produce `Self`.
+    // Trigger only when all constructor methods clearly refer to the struct type
+    // (bare method name -> inherent; or path starting with the struct ident).
+    let single_field_self_ctor = if infos.len() == 1 {
+        if let Some(custom) = &infos[0].custom_samples {
+            let ctor_methods: Vec<&syn::Path> = custom
+                .iter()
+                .filter_map(|c| match c {
+                    CustomSample::ConstFn { method, .. } => Some(method),
+                    _ => None,
+                })
+                .collect();
+            if ctor_methods.is_empty() {
+                false
+            } else {
+                ctor_methods.into_iter().all(|path| {
+                    if path.leading_colon.is_none() && path.segments.len() == 1 {
+                        true
+                    } else {
+                        path.segments
+                            .first()
+                            .map(|seg| seg.ident == ident)
+                            .unwrap_or(false)
+                    }
+                })
+            }
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
     for (i, info) in infos.iter().enumerate() {
         let cands = format_ident!("f{}_cands", i);
         let var = format_ident!("f{}_val", i);
@@ -83,7 +118,58 @@ pub fn derive_samples(input: TokenStream) -> TokenStream {
         let name = &info.name;
 
         if let Some(custom_samples) = info.custom_samples.as_ref() {
-            let custom_exprs: Vec<_> = custom_samples
+            // If single field struct and overrides use constructor methods, build `Vec<Self>`.
+            if single_field_self_ctor {
+                let custom_exprs: Vec<_> = custom_samples
+                    .iter()
+                    .enumerate()
+                    .map(|(j, sample)| match sample {
+                        CustomSample::Direct(expr) => {
+                            let expr = expr.clone();
+                            quote! { ( #expr ) }
+                        }
+                        CustomSample::ConstFn { expr, method } => {
+                            let expr = expr.clone();
+                            let method = method.clone();
+                            // Qualify bare identifiers against the struct type
+                            let method_call = if method.leading_colon.is_none() && method.segments.len() == 1 {
+                                let seg_ident = method.segments.first().unwrap().ident.clone();
+                                quote! { <#ident>::#seg_ident }
+                            } else {
+                                quote! { #method }
+                            };
+                            let message = LitStr::new(
+                                &format!(
+                                    "failed to validate #[samples] value for field `{}`",
+                                    name
+                                ),
+                                proc_macro2::Span::call_site(),
+                            );
+                            let struct_name = ident.to_string().to_uppercase();
+                            let field_name = name.to_string().to_uppercase();
+                            let const_ident = format_ident!("__SAMPLES_CONST_{}_{}_{}", struct_name, field_name, j);
+                            quote! {
+                                {
+                                    const #const_ident: () = {
+                                        let __value = #method_call(#expr);
+                                        if samples_core::__private::const_result_is_err::<#ident, _>(&__value) {
+                                            panic!(#message);
+                                        }
+                                    };
+                                    match #method_call(#expr) {
+                                        ::core::result::Result::Ok(v) => v,
+                                        ::core::result::Result::Err(_) => unreachable!("checked in const"),
+                                    }
+                                }
+                            }
+                        }
+                    })
+                    .collect();
+                prelude.push(quote! {
+                    let #cands: ::std::vec::Vec<#ident> = vec![#(#custom_exprs),*];
+                });
+            } else {
+                let custom_exprs: Vec<_> = custom_samples
                 .iter()
                 .enumerate()
                 .map(|(j, sample)| match sample {
@@ -94,35 +180,48 @@ pub fn derive_samples(input: TokenStream) -> TokenStream {
                     CustomSample::ConstFn { expr, method } => {
                         let expr = expr.clone();
                         let method = method.clone();
+                        // If the provided method path is a bare identifier (e.g., `const_try_from`),
+                        // qualify it as an inherent associated function on the field type: `<#ty>::const_try_from`.
+                        // Otherwise, use the path as-is (e.g., `Interval::const_try_from` or a fully qualified path).
+                        let method_call = if method.leading_colon.is_none() && method.segments.len() == 1 {
+                            let seg_ident = method.segments.first().unwrap().ident.clone();
+                            quote! { <#ty>::#seg_ident }
+                        } else {
+                            quote! { #method }
+                        };
                         let message = LitStr::new(
                             &format!(
-                                "failed to validate #[samples] value for field `{}` using {}::{}",
-                                name, ident, method
+                                "failed to validate #[samples] value for field `{}`",
+                                name
                             ),
-                            method.span(),
+                            proc_macro2::Span::call_site(),
                         );
                         let struct_name = ident.to_string().to_uppercase();
                         let field_name = name.to_string().to_uppercase();
                         let const_ident = format_ident!("__SAMPLES_CONST_{}_{}_{}", struct_name, field_name, j);
                         quote! {
                             {
-                                const #const_ident: #ty = {
-                                    let _: fn(#ty) -> _ = #ident::#method;
-                                    let __value = #ident::#method(#expr);
-                                    if samples_core::__private::const_result_is_err::<#ident, _>(&__value) {
+                                // Compile-time validation that the provided expr produces a valid #ty
+                                const #const_ident: () = {
+                                    let __value = #method_call(#expr);
+                                    if samples_core::__private::const_result_is_err::<#ty, _>(&__value) {
                                         panic!(#message);
                                     }
-                                    #expr
                                 };
-                                #const_ident
+                                // Construct the actual value at runtime (handles Result-returning fns)
+                                match #method_call(#expr) {
+                                    ::core::result::Result::Ok(v) => v,
+                                    ::core::result::Result::Err(_) => unreachable!("checked in const"),
+                                }
                             }
                         }
                     }
                 })
                 .collect();
-            prelude.push(quote! {
-                let #cands: ::std::vec::Vec<#ty> = vec![#(#custom_exprs),*];
-            });
+                prelude.push(quote! {
+                    let #cands: ::std::vec::Vec<#ty> = vec![#(#custom_exprs),*];
+                });
+            }
         } else {
             prelude.push(quote! {
                 let #cands: ::std::vec::Vec<#ty> =
@@ -154,18 +253,28 @@ pub fn derive_samples(input: TokenStream) -> TokenStream {
 
     let body = if infos.len() == 1 {
         let cands = &candidate_idents[0];
-        let assignments = &field_assignments_move;
-        let var = &loop_vars[0];
-        quote! {
-            if #cands.is_empty() {
-                return Box::new(::std::iter::empty());
+        if single_field_self_ctor {
+            quote! {
+                if #cands.is_empty() {
+                    return Box::new(::std::iter::empty());
+                }
+                let iter = #cands.into_iter();
+                Box::new(iter)
             }
-            let iter = #cands.into_iter().map(|#var| Self {
-                #(#assignments,)*
-            });
-            Box::new(iter)
+        } else {
+            let assignments = &field_assignments_move;
+            let var = &loop_vars[0];
+            quote! {
+                if #cands.is_empty() {
+                    return Box::new(::std::iter::empty());
+                }
+                let iter = #cands.into_iter().map(|#var| Self {
+                    #(#assignments,)*
+                });
+                Box::new(iter)
+            }
         }
-    } else if infos.len() <= 12 {
+    } else if infos.len() <= 8 {
         let assignments = &field_assignments_move;
         let vars = &loop_vars;
         quote! {
@@ -310,7 +419,7 @@ fn parse_samples_attr(input: syn::parse::ParseStream<'_>) -> syn::Result<Vec<Cus
             }
             let method = if input.peek(Token![->]) {
                 input.parse::<Token![->]>()?;
-                Some(input.parse::<syn::Ident>()?)
+                Some(input.parse::<syn::Path>()?)
             } else {
                 None
             };
@@ -327,7 +436,7 @@ fn parse_samples_attr(input: syn::parse::ParseStream<'_>) -> syn::Result<Vec<Cus
             let expr = parse_sample_expr(input)?;
             let method = if input.peek(Token![->]) {
                 input.parse::<Token![->]>()?;
-                Some(input.parse::<syn::Ident>()?)
+                Some(input.parse::<syn::Path>()?)
             } else {
                 None
             };

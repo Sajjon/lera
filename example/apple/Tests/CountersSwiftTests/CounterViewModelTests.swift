@@ -13,10 +13,24 @@ import XCTest
 struct CounterViewModelTests {
 	
 	
-	@Test("state stamples", arguments: 0 ... 10)
+	@Test("state stamples", arguments: 1 ... 10)
 	func stateSamples(n: UInt8) {
 		let samples = CounterState.samples(n: n)
-		#expect(samples.count == n)
+		let sampleCount = samples.count
+		#expect(sampleCount == Set(samples).count)
+		#expect(sampleCount >= 1)
+		#expect(sampleCount <= n)
+	}
+	
+	@Test("viewmodelHashable")
+	func modelHashable() {
+		let n = 8
+		
+		let viewModels = CounterViewModel.State
+			.samples(n: UInt8(n))
+			.map(CounterViewModel.init)
+		
+		#expect(Set(viewModels).count == n)
 	}
 	
 	@Test("increment once")
@@ -80,14 +94,12 @@ struct CounterViewModelTests {
 		
 	}
 	
-	@Test("equatable & hashable")
-	func equatableAndHashable() {
+	@Test("state equatable & hashable")
+	func stateEquatableAndHashable() {
 		
-		let baseState = CounterState(count: 0, isAutoIncrementing: false, autoIncrementIntervalMs: Interval(ms: 1000))
-
-		let instance = CounterViewModel(state: baseState)
-		let another = CounterViewModel(state: baseState)
-		let different = CounterViewModel(state: CounterState(count: 42, isAutoIncrementing: false, autoIncrementIntervalMs: Interval(ms: 1)))
+		let instance = CounterState(count: 0, isAutoIncrementing: false, autoIncrementIntervalMs: Interval(ms: 1000))
+		let another = CounterState(count: 0, isAutoIncrementing: false, autoIncrementIntervalMs: Interval(ms: 1000))
+		let different = CounterState(count: 42, isAutoIncrementing: false, autoIncrementIntervalMs: Interval(ms: 1))
 
 		#expect(instance == another)
 		#expect(instance != different)

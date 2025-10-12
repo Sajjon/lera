@@ -8,24 +8,29 @@ extension {{ model.state_name }} {
 		self = {{ model.default_state_fn }}()
 	}
 
+	{% if model.enable_samples %}
 	public static func samples(n: UInt8) -> [Self] {
 		{{ model.samples_state_fn }}(n: n)
 	}
+	{% endif %}
 }
 
 @Observable
 @dynamicMemberLookup
 public final class {{ model.model_name }}ViewModel: @unchecked Sendable {
-	private var state: {{ model.state_name }}
+	public private(set) var state: {{ model.state_name }}
 	@ObservationIgnored
 	fileprivate let model: {{ model.model_name }}
 	@ObservationIgnored
 	private let listener: {{ model.listener_name }}
+	@ObservationIgnored
+	private let objectId: ObjectIdentifier
 	
 	private init(state: {{ model.state_name }}, listener: {{ model.listener_name }}) {
 		self.state = state
 		self.listener = listener
 		self.model = {{ model.model_name }}(state: state, listener: listener)
+		self.objectId = ObjectIdentifier(self.model)
 	}
 	
 	deinit {
@@ -93,18 +98,37 @@ extension {{ model.model_name }}ViewModel {
 	public typealias State = {{ model.state_name }}
 }
 
+{% if model.enable_samples %}
+// MARK: Samples
+extension {{ model.model_name }}ViewModel {
+	/// Creates at most `n` view models using `{{ model.model_name }}State.samples(n:)`.
+	public static func samples(n: UInt8) -> [{{ model.model_name }}ViewModel] {
+		{{ model.model_name }}ViewModel.State
+			.samples(n: n)
+			.map({{ model.model_name }}ViewModel.init)
+	}
+}
+{% endif %}
+
 // MARK: Equatable
 extension {{ model.model_name }}ViewModel: Equatable {
+	// Compare by object identity to ensure stability across state mutations.
 	public static func ==(lhs: {{ model.model_name }}ViewModel, rhs: {{ model.model_name }}ViewModel) -> Bool {
-		lhs.model == rhs.model
+		lhs.model === rhs.model
 	}
 }
 
 // MARK: Hashable
 extension {{ model.model_name }}ViewModel: Hashable {
+	// Hash by object identity to avoid hash changes when the underlying state mutates.
 	public func hash(into hasher: inout Hasher) {
-		hasher.combine(model)
+		hasher.combine(objectId)
 	}
+}
+
+// MARK: Identifiable
+extension {{ model.model_name }}ViewModel: Identifiable {
+	public var id: ObjectIdentifier { objectId }
 }
 
 // MARK: CustomStringConvertible

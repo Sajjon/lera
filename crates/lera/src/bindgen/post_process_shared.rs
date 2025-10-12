@@ -53,6 +53,7 @@ pub struct ParsedModel {
     pub listener_name: String,
     pub default_state_fn: String,
     pub samples_state_fn: String,
+    pub enable_samples: bool,
     pub methods: Vec<ParsedMethod>,
     pub source_path: PathBuf,
 }
@@ -251,6 +252,7 @@ fn collect_model_info(
     let listener_name = format!("{}ChangeListener", state_name);
     let mut found_state_struct = false;
     let mut found_api_impl = false;
+    let mut enable_samples = false;
     let mut methods = Vec::new();
 
     for item in &syntax_tree.items {
@@ -269,6 +271,15 @@ fn collect_model_info(
                             "ACTIONABLE ERROR: state struct {} must use #[lera::state] in {:?}",
                             state_name, file_path
                         ));
+                    }
+                    // Determine whether #[lera::state] had the optional `samples` argument.
+                    if let Some(attr) = attrs.iter().find(|a| attr_is_lera(a, "state")) {
+                        // If args exist and are `samples`, mark enabled; otherwise false.
+                        if let Ok(ident) = attr.parse_args::<syn::Ident>() {
+                            if ident == "samples" {
+                                enable_samples = true;
+                            }
+                        }
                     }
                     found_state_struct = true;
                 }
@@ -359,6 +370,7 @@ fn collect_model_info(
         listener_name,
         default_state_fn: to_default_state_fn_name(state_name),
         samples_state_fn: to_samples_state_fn_name(state_name),
+        enable_samples,
         methods,
         source_path: file_path.to_path_buf(),
     })

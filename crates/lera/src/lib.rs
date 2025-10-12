@@ -38,8 +38,8 @@ pub mod fmt_utils {
     }
 }
 
-pub trait ModelState: std::fmt::Debug + Clone + PartialEq + Default + Samples {}
-impl<T: std::fmt::Debug + Clone + PartialEq + Default + Samples> ModelState for T {}
+pub trait ModelState: std::fmt::Debug + Clone + PartialEq + Default {}
+impl<T: std::fmt::Debug + Clone + PartialEq + Default> ModelState for T {}
 
 /// Macro to generate the boilerplate implementation to bridge UniFFI traits to StateChangeListener
 #[macro_export]

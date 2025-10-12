@@ -35,6 +35,7 @@ uniffi = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891
     "bindgen-tests",
 ] }
 actix-rt = "2.11.0"
+pretty_assertions = "1.4"
 
 [build-dependencies]
 uniffi = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093", features = [

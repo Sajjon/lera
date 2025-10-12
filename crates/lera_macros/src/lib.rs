@@ -8,13 +8,21 @@ use syn::{
 
 #[proc_macro_attribute]
 pub fn state(attr: TokenStream, item: TokenStream) -> TokenStream {
-    if !attr.is_empty() {
-        return syn::Error::new_spanned(
-            proc_macro2::TokenStream::from(attr),
-            "`#[lera::state]` does not accept arguments",
-        )
-        .to_compile_error()
-        .into();
+    // Optional argument: `samples` to also derive samples and export sample constructor.
+    let attr_ts = proc_macro2::TokenStream::from(attr);
+    let mut enable_samples = false;
+    let attr_trimmed = attr_ts.to_string().replace(' ', "");
+    if !attr_trimmed.is_empty() {
+        if attr_trimmed == "samples" {
+            enable_samples = true;
+        } else {
+            return syn::Error::new_spanned(
+                attr_ts,
+                "`#[lera::state]` only supports optional `samples` argument, e.g. #[lera::state(samples)]",
+            )
+            .to_compile_error()
+            .into();
+        }
     }
 
     let mut item_struct = parse_macro_input!(item as ItemStruct);
@@ -24,9 +32,11 @@ pub fn state(attr: TokenStream, item: TokenStream) -> TokenStream {
         return err.to_compile_error().into();
     }
 
-    let samples_path = parse_path("samples_derive::Samples");
-    if let Err(err) = ensure_derive(&mut item_struct.attrs, &samples_path) {
-        return err.to_compile_error().into();
+    if enable_samples {
+        let samples_path = parse_path("samples_derive::Samples");
+        if let Err(err) = ensure_derive(&mut item_struct.attrs, &samples_path) {
+            return err.to_compile_error().into();
+        }
     }
 
     let struct_ident = item_struct.ident.clone();
@@ -38,26 +48,45 @@ pub fn state(attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_name_new_samples =
         format_ident!("new_{}_samples", struct_ident.to_string().to_snake_case());
 
-    let expanded = quote! {
-        #item_struct
+    let expanded = if enable_samples {
+        quote! {
+            #item_struct
 
-        #[uniffi::export]
-        #struct_vis fn #fn_name_new_default() -> #struct_ident {
-            #struct_ident::default()
+            #[uniffi::export]
+            #struct_vis fn #fn_name_new_default() -> #struct_ident {
+                #struct_ident::default()
+            }
+
+            // Export a sample-constructor function only when Samples is enabled for this state.
+            #[uniffi::export]
+            #struct_vis fn #fn_name_new_samples(n: u8) -> Vec<#struct_ident> {
+                use samples_core::Samples;
+                #struct_ident::sample_vec_n(n)
+            }
+
+            #[uniffi::export(with_foreign)]
+            #struct_vis trait #listener_ident: Send + Sync {
+                fn on_state_change(&self, state: #struct_ident);
+            }
+
+            ::lera::impl_state_change_listener_bridge!(#listener_ident, #struct_ident);
         }
+    } else {
+        quote! {
+            #item_struct
 
-        #[uniffi::export]
-        #struct_vis fn #fn_name_new_samples(n: u8) -> Vec<#struct_ident> {
-            use samples_core::Samples;
-            #struct_ident::sample_vec_n(n)
+            #[uniffi::export]
+            #struct_vis fn #fn_name_new_default() -> #struct_ident {
+                #struct_ident::default()
+            }
+
+            #[uniffi::export(with_foreign)]
+            #struct_vis trait #listener_ident: Send + Sync {
+                fn on_state_change(&self, state: #struct_ident);
+            }
+
+            ::lera::impl_state_change_listener_bridge!(#listener_ident, #struct_ident);
         }
-
-        #[uniffi::export(with_foreign)]
-        #struct_vis trait #listener_ident: Send + Sync {
-            fn on_state_change(&self, state: #struct_ident);
-        }
-
-        ::lera::impl_state_change_listener_bridge!(#listener_ident, #struct_ident);
     };
 
     expanded.into()
