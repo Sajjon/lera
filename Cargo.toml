@@ -18,10 +18,8 @@ samples-core = { path = "crates/samples-core", version = "0.1.0" }
 samples-derive = { path = "crates/samples-derive", version = "0.1.0" }
 
 # External dependencies
+uniffi = { version = "0.30.0", features = ["cli"] }
+uniffi_bindgen = { version = "0.30.0" }
 syn = { version = "2.0", features = ["full", "extra-traits"] }
-uniffi = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093", features = [
-    "cli",
-] }
-uniffi_bindgen = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093" }
 quote = "1.0"
 proc-macro2 = "1"

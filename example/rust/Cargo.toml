@@ -28,16 +28,12 @@ derive_more = {version = "2.0", features = ["deref"] }
 paste = "1.0.15"
 thiserror = "2.0.17"
 tokio = { version = "1", features = ["full"] }
-uniffi = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093" }
+uniffi = { version = "0.30.0" }
 
 [dev-dependencies]
-uniffi = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093", features = [
-    "bindgen-tests",
-] }
 actix-rt = "2.11.0"
 pretty_assertions = "1.4"
+uniffi = { version = "0.30.0", features = ["bindgen-tests"] }
 
 [build-dependencies]
-uniffi = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "15738c7dc891da3beb06fa1af31df2eed9607093", features = [
-    "build",
-] }
+uniffi = { version = "0.30.0", features = ["build"] }
