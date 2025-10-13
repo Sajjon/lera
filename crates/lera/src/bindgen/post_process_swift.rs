@@ -4,8 +4,8 @@ use std::path::Path;
 use syn::{Expr, ExprUnary, Type, TypePath, UnOp};
 
 use super::post_process_shared::{
-    DefaultParamValue, ParsedMethod, ParsedModel, ParsedReturnType, parse_lera_models,
-    to_camel_case, type_path_generic_args,
+    DefaultParamValue, ParsedMethod, ParsedModel, ParsedReturnType, ParsedStateField,
+    parse_lera_models, to_camel_case, type_path_generic_args,
 };
 
 #[derive(Debug, Clone)]
@@ -24,6 +24,13 @@ pub struct LeraModelInfo {
     pub samples_state_fn: String,
     pub enable_samples: bool,
     pub methods: Vec<String>,
+    pub state_fields: Vec<SwiftStateFieldInfo>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SwiftStateFieldInfo {
+    pub property_name: String,
+    pub property_type: String,
 }
 
 #[derive(Template)]
@@ -73,6 +80,11 @@ fn build_model_info(model: &ParsedModel) -> LeraModelInfo {
         .iter()
         .map(|method| build_method(method, model))
         .collect();
+    let state_fields = model
+        .state_fields
+        .iter()
+        .map(build_state_field_info)
+        .collect();
 
     LeraModelInfo {
         model_name: model.model_name.clone(),
@@ -82,6 +94,16 @@ fn build_model_info(model: &ParsedModel) -> LeraModelInfo {
         samples_state_fn: model.samples_state_fn.clone(),
         enable_samples: model.enable_samples,
         methods,
+        state_fields,
+    }
+}
+
+fn build_state_field_info(field: &ParsedStateField) -> SwiftStateFieldInfo {
+    let property_name = to_camel_case(&field.rust_name);
+    let property_type = swift_type_from_syn_type(&field.ty);
+    SwiftStateFieldInfo {
+        property_name,
+        property_type,
     }
 }
 

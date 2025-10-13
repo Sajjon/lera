@@ -16,21 +16,50 @@ extension {{ model.state_name }} {
 }
 
 @Observable
-@dynamicMemberLookup
 public final class {{ model.model_name }}ViewModel: @unchecked Sendable {
-	public private(set) var state: {{ model.state_name }}
+	
+	// MARK: Non-observed properties
 	@ObservationIgnored
 	fileprivate let model: {{ model.model_name }}
 	@ObservationIgnored
 	private let listener: {{ model.listener_name }}
 	@ObservationIgnored
 	private let objectId: ObjectIdentifier
-	
+
+	/// Ignored for observation; use the individual stored properties exposed below.
+	/// We let this non observed property be public if we ever want to be able
+	/// to grab the whole state e.g. to pass to next viewmodel part of navigation
+	/// 
+	/// Rust will update this state and we have a `didSet` property observer 
+	/// on this property which will update these state properties which **are** observed:
+	{%- for field in model.state_fields %}
+	///	* ``{{ field.property_name }}``
+	{%- endfor %}
+	@ObservationIgnored
+	public private(set) var state: {{ model.state_name }} {
+		didSet {
+{% for field in model.state_fields %}
+			self.{{ field.property_name }} = state.{{ field.property_name }}
+{% endfor %}
+		}
+	}
+
+	// MARK: Observed Properties
+{% for field in model.state_fields %}
+    /// Public getter, private setter, this stored property is observed
+	/// and gets updated originally from Rust, then here in Swift `state` will
+	/// get update which updates this property in its didSet property observer.
+	public private(set) var {{ field.property_name }}: {{ field.property_type }}
+{% endfor %}
+
 	private init(state: {{ model.state_name }}, listener: {{ model.listener_name }}) {
 		self.state = state
 		self.listener = listener
 		self.model = {{ model.model_name }}(state: state, listener: listener)
 		self.objectId = ObjectIdentifier(self.model)
+{% for field in model.state_fields %}
+		self.{{ field.property_name }} = state.{{ field.property_name }}
+{% endfor %}
 	}
 	
 	deinit {
@@ -77,13 +106,6 @@ extension {{ model.model_name }}ViewModel {
 		func onStateChange(state: {{ model.state_name }}) {
 			forwarder?.forward(state)
 		}
-	}
-}
-
-// MARK: @dynamicMemberLookup
-extension {{ model.model_name }}ViewModel {
-	public subscript<Subject>(dynamicMember keyPath: KeyPath<{{ model.state_name }}, Subject>) -> Subject {
-		self.state[keyPath: keyPath]
 	}
 }
 

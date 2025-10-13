@@ -5,7 +5,7 @@ use std::{
 };
 
 use syn::{
-    Attribute, Expr, FnArg, Item, ItemImpl, ItemStruct, Pat, ReturnType, Type, TypePath,
+    Attribute, Expr, Fields, FnArg, Item, ItemImpl, ItemStruct, Pat, ReturnType, Type, TypePath,
     Visibility,
     parse::{Parse, ParseStream},
     parse_file,
@@ -56,6 +56,13 @@ pub struct ParsedModel {
     pub enable_samples: bool,
     pub methods: Vec<ParsedMethod>,
     pub source_path: PathBuf,
+    pub state_fields: Vec<ParsedStateField>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParsedStateField {
+    pub rust_name: String,
+    pub ty: Type,
 }
 
 pub fn to_camel_case(snake_case: &str) -> String {
@@ -211,16 +218,17 @@ fn parse_file_for_lera_models(
     let mut models = Vec::new();
 
     for item in &syntax_tree.items {
-        if let Item::Struct(ItemStruct { ident, attrs, .. }) = item {
-            if has_lera_attr(attrs, "model") {
-                let state_name = attrs
+        if let Item::Struct(item_struct) = item {
+            if has_lera_attr(&item_struct.attrs, "model") {
+                let state_name = item_struct
+                    .attrs
                     .iter()
                     .find(|attr| attr_is_lera(attr, "model"))
                     .map(|attr| {
                         attr.parse_args::<ModelAttrArgs>().map_err(|e| {
                             format!(
                                 "Failed to parse #[lera::model] attribute on {} in {:?}: {}",
-                                ident, file_path, e
+                                item_struct.ident, file_path, e
                             )
                         })
                     })
@@ -229,11 +237,12 @@ fn parse_file_for_lera_models(
                     .ok_or_else(|| {
                         format!(
                             "#[lera::model] attribute on {} in {:?} must specify a state",
-                            ident, file_path
+                            item_struct.ident, file_path
                         )
                     })?;
 
-                let model_info = collect_model_info(ident, &state_name, syntax_tree, file_path)?;
+                let model_info =
+                    collect_model_info(&item_struct.ident, &state_name, syntax_tree, file_path)?;
                 models.push(model_info);
             }
         }
@@ -254,10 +263,14 @@ fn collect_model_info(
     let mut found_api_impl = false;
     let mut enable_samples = false;
     let mut methods = Vec::new();
+    let mut state_fields = Vec::new();
 
     for item in &syntax_tree.items {
         match item {
-            Item::Struct(ItemStruct { ident, attrs, .. }) => {
+            Item::Struct(item_struct) => {
+                let ident = &item_struct.ident;
+                let attrs = &item_struct.attrs;
+
                 if ident == model_ident && !has_lera_attr(attrs, "model") {
                     return Err(format!(
                         "ACTIONABLE ERROR: struct {} must use #[lera::model] in {:?}",
@@ -281,6 +294,7 @@ fn collect_model_info(
                             }
                         }
                     }
+                    state_fields = extract_state_fields(item_struct, state_name, file_path)?;
                     found_state_struct = true;
                 }
             }
@@ -373,6 +387,7 @@ fn collect_model_info(
         enable_samples,
         methods,
         source_path: file_path.to_path_buf(),
+        state_fields,
     })
 }
 
@@ -528,5 +543,34 @@ pub fn type_to_string(ty: &Type) -> String {
         Type::Array(array) => format!("[{}; _]", type_to_string(&array.elem)),
         Type::Slice(slice) => format!("[{}]", type_to_string(&slice.elem)),
         _ => "Unknown".to_string(),
+    }
+}
+
+fn extract_state_fields(
+    item_struct: &ItemStruct,
+    state_name: &str,
+    file_path: &Path,
+) -> Result<Vec<ParsedStateField>, String> {
+    match &item_struct.fields {
+        Fields::Named(fields_named) => fields_named
+            .named
+            .iter()
+            .map(|field| {
+                let ident = field.ident.as_ref().ok_or_else(|| {
+                    format!(
+                        "ACTIONABLE ERROR: state struct {} has unnamed fields in {:?}",
+                        state_name, file_path
+                    )
+                })?;
+                Ok(ParsedStateField {
+                    rust_name: ident.to_string(),
+                    ty: field.ty.clone(),
+                })
+            })
+            .collect(),
+        Fields::Unnamed(_) | Fields::Unit => Err(format!(
+            "ACTIONABLE ERROR: state struct {} in {:?} must have named fields",
+            state_name, file_path
+        )),
     }
 }

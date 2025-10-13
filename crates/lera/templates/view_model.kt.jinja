@@ -15,6 +15,11 @@ class {{ model.model_name }}ViewModel(
     private val _uiState = kotlinx.coroutines.flow.MutableStateFlow(state)
     val uiState: kotlinx.coroutines.flow.StateFlow<{{ model.state_name }}> =
         _uiState.asStateFlow()
+{% for field in model.state_fields %}
+    private val _{{ field.property_name }} = kotlinx.coroutines.flow.MutableStateFlow(state.{{ field.property_name }})
+    val {{ field.property_name }}: kotlinx.coroutines.flow.StateFlow<{{ field.property_type }}> =
+        _{{ field.property_name }}.asStateFlow()
+{% endfor %}
 
     companion object {
         {% if model.enable_samples %}
@@ -30,8 +35,15 @@ class {{ model.model_name }}ViewModel(
 
     init {
         listener.addForwarder { newState ->
-            _uiState.value = newState
+            applyState(newState)
         }
+    }
+
+    private fun applyState(newState: {{ model.state_name }}) {
+        _uiState.value = newState
+{% for field in model.state_fields %}
+        _{{ field.property_name }}.value = newState.{{ field.property_name }}
+{% endfor %}
     }
 
 {% for method in model.methods %}

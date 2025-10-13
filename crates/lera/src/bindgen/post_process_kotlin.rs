@@ -4,8 +4,8 @@ use std::path::Path;
 use syn::{Expr, ExprUnary, Type, TypePath, UnOp};
 
 use super::post_process_shared::{
-    DefaultParamValue, ParsedMethod, ParsedModel, ParsedReturnType, parse_lera_models,
-    to_camel_case, type_path_generic_args,
+    DefaultParamValue, ParsedMethod, ParsedModel, ParsedReturnType, ParsedStateField,
+    parse_lera_models, to_camel_case, type_path_generic_args,
 };
 
 #[derive(Debug, Clone)]
@@ -24,12 +24,19 @@ struct KotlinModelInfo {
     samples_state_fn: String,
     enable_samples: bool,
     methods: Vec<String>,
+    state_fields: Vec<KotlinStateFieldInfo>,
 }
 
 #[derive(Template)]
 #[template(path = "view_model.kt.jinja", escape = "none")]
 struct KotlinViewModelTemplate {
     models: Vec<KotlinModelInfo>,
+}
+
+#[derive(Debug, Clone)]
+struct KotlinStateFieldInfo {
+    property_name: String,
+    property_type: String,
 }
 
 struct ReturnMetadata {
@@ -92,6 +99,11 @@ fn build_model_info(model: &ParsedModel) -> Result<KotlinModelInfo, String> {
         .iter()
         .map(|method| build_method(method, model))
         .collect::<Result<Vec<_>, _>>()?;
+    let state_fields = model
+        .state_fields
+        .iter()
+        .map(build_state_field_info)
+        .collect::<Vec<_>>();
 
     Ok(KotlinModelInfo {
         model_name: model.model_name.clone(),
@@ -101,7 +113,17 @@ fn build_model_info(model: &ParsedModel) -> Result<KotlinModelInfo, String> {
         samples_state_fn: model.samples_state_fn.clone(),
         enable_samples: model.enable_samples,
         methods,
+        state_fields,
     })
+}
+
+fn build_state_field_info(field: &ParsedStateField) -> KotlinStateFieldInfo {
+    let property_name = to_camel_case(&field.rust_name);
+    let property_type = kotlin_type_from_syn_type(&field.ty);
+    KotlinStateFieldInfo {
+        property_name,
+        property_type,
+    }
 }
 
 fn build_method(method: &ParsedMethod, model: &ParsedModel) -> Result<String, String> {
