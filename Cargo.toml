@@ -7,7 +7,9 @@ members = [
     "crates/samples-derive",
 ]
 resolver = "2"
-exclude = ["example/rust"]
+exclude = [
+    "example/rust",
+]
 
 [workspace.dependencies]
 # Internal dependencies

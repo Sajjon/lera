@@ -13,6 +13,7 @@ import SwiftUI
 public struct CounterView: View {
 	private let model: CounterViewModel
 	public init(model: CounterViewModel = CounterViewModel()) {
+        print("🐍 CounterView INIT model: \(model.id)")
 		self.model = model
 	}
 }

@@ -273,7 +273,7 @@ fn kotlin_type_from_syn_type(ty: &Type) -> String {
 fn kotlin_type_from_type_path(type_path: &TypePath) -> String {
     let ident = match type_path.path.segments.last() {
         Some(segment) => segment,
-        None => return "Unknown".to_string(),
+        None => return "Unknown4".to_string(),
     };
 
     let ident_str = ident.ident.to_string();
@@ -462,7 +462,7 @@ fn type_to_string(ty: &Type) -> String {
             .segments
             .last()
             .map(|seg| seg.ident.to_string())
-            .unwrap_or_else(|| "Unknown".to_string()),
+            .unwrap_or_else(|| "Unknown5".to_string()),
         Type::Reference(type_ref) => {
             format!("&{}", type_to_string(&type_ref.elem))
         }
@@ -473,6 +473,6 @@ fn type_to_string(ty: &Type) -> String {
         }
         Type::Array(array) => format!("[{}; _]", type_to_string(&array.elem)),
         Type::Slice(slice) => format!("[{}]", type_to_string(&slice.elem)),
-        _ => "Unknown".to_string(),
+        _ => "Unknown6".to_string(),
     }
 }

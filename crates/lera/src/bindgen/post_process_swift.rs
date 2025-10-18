@@ -23,6 +23,7 @@ pub struct LeraModelInfo {
     pub default_state_fn: String,
     pub samples_state_fn: String,
     pub enable_samples: bool,
+    pub has_navigator: bool,
     pub methods: Vec<String>,
 }
 
@@ -50,9 +51,10 @@ pub(crate) fn swift_transform(
 
     for model in &models {
         println!(
-            "   - {} with {} methods",
+            "   - {} with {} methods, state={}",
             model.model_name,
-            model.methods.len()
+            model.methods.len(),
+            model.state_name
         );
     }
 
@@ -81,6 +83,7 @@ fn build_model_info(model: &ParsedModel) -> LeraModelInfo {
         default_state_fn: model.default_state_fn.clone(),
         samples_state_fn: model.samples_state_fn.clone(),
         enable_samples: model.enable_samples,
+        has_navigator: model.has_navigator,
         methods,
     }
 }
@@ -268,7 +271,7 @@ fn swift_type_from_syn_type(ty: &Type) -> String {
 fn swift_type_from_type_path(type_path: &TypePath) -> String {
     let ident = match type_path.path.segments.last() {
         Some(segment) => segment,
-        None => return "Unknown".to_string(),
+        None => return "Unknown7".to_string(),
     };
 
     let ident_str = ident.ident.to_string();
@@ -432,7 +435,7 @@ fn type_to_string(ty: &Type) -> String {
             .segments
             .last()
             .map(|seg| seg.ident.to_string())
-            .unwrap_or_else(|| "Unknown".to_string()),
+            .unwrap_or_else(|| "Unknown8".to_string()),
         Type::Reference(type_ref) => {
             format!("&{}", type_to_string(&type_ref.elem))
         }
@@ -443,6 +446,26 @@ fn type_to_string(ty: &Type) -> String {
         }
         Type::Array(array) => format!("[{}; _]", type_to_string(&array.elem)),
         Type::Slice(slice) => format!("[{}]", type_to_string(&slice.elem)),
-        _ => "Unknown".to_string(),
+        Type::TraitObject(trait_objc) => dyn_trait_to_string(trait_objc),
+        Type::ImplTrait(_) => "implTrait".to_string(),
+        _ => "NotYetSupportedType".to_string(),
     }
+}
+
+fn dyn_trait_to_string(trait_obj: &syn::TypeTraitObject) -> String {
+    let traits: Vec<String> = trait_obj
+        .bounds
+        .iter()
+        .filter_map(|bound| {
+            if let syn::TypeParamBound::Trait(trait_bound) = bound {
+                if trait_bound.path.segments.len() > 1 {
+                    panic!("Multi-segment trait in dyn Trait is not yet supported, raise a github issue");
+                }
+                Some(trait_bound.path.segments.last().unwrap().ident.to_string())
+            } else {
+                None
+            }
+        })
+        .collect();
+    traits.join(" & ")
 }

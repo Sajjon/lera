@@ -54,6 +54,7 @@ pub struct ParsedModel {
     pub default_state_fn: String,
     pub samples_state_fn: String,
     pub enable_samples: bool,
+    pub has_navigator: bool,
     pub methods: Vec<ParsedMethod>,
     pub source_path: PathBuf,
 }
@@ -179,10 +180,17 @@ pub fn parse_lera_models(path_to_target_rust_crate: &Path) -> Result<Vec<ParsedM
 }
 
 fn parse_models_in_dir(dir: &Path) -> Result<Vec<ParsedModel>, String> {
+    let mut models = Vec::new();
+    parse_models_in_dir_inner(dir, &mut models)?;
+    Ok(models)
+}
+
+fn parse_models_in_dir_inner(
+    dir: &Path,
+    extending_models: &mut Vec<ParsedModel>,
+) -> Result<(), String> {
     let entries = fs::read_dir(dir)
         .map_err(|e| format!("Failed to read models directory {}: {}", dir.display(), e))?;
-
-    let mut models = Vec::new();
 
     for entry in entries {
         let entry = entry
@@ -190,6 +198,7 @@ fn parse_models_in_dir(dir: &Path) -> Result<Vec<ParsedModel>, String> {
         let path = entry.path();
 
         if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+            println!("Found file: {:?}", path);
             let content = fs::read_to_string(&path)
                 .map_err(|e| format!("Failed to read {:?}: {}", path, e))?;
 
@@ -197,11 +206,21 @@ fn parse_models_in_dir(dir: &Path) -> Result<Vec<ParsedModel>, String> {
                 parse_file(&content).map_err(|e| format!("Failed to parse {:?}: {}", path, e))?;
 
             let file_models = parse_file_for_lera_models(&syntax_tree, &path)?;
-            models.extend(file_models);
+            extending_models.extend(file_models);
+        } else if path.is_dir() {
+            println!(
+                "Found directory, parsing contents of: `{:?}`",
+                path.components()
+                    .last()
+                    .as_ref()
+                    .map(|c| format!("{:?}", c))
+                    .unwrap_or_default()
+            );
+            parse_models_in_dir_inner(&path, extending_models)?;
         }
     }
 
-    Ok(models)
+    Ok(())
 }
 
 fn parse_file_for_lera_models(
@@ -213,27 +232,28 @@ fn parse_file_for_lera_models(
     for item in &syntax_tree.items {
         if let Item::Struct(ItemStruct { ident, attrs, .. }) = item {
             if has_lera_attr(attrs, "model") {
-                let state_name = attrs
-                    .iter()
-                    .find(|attr| attr_is_lera(attr, "model"))
-                    .map(|attr| {
-                        attr.parse_args::<ModelAttrArgs>().map_err(|e| {
-                            format!(
-                                "Failed to parse #[lera::model] attribute on {} in {:?}: {}",
-                                ident, file_path, e
-                            )
-                        })
-                    })
-                    .transpose()? // Option<Result<...>> -> Result<Option<...>>
-                    .map(|args| type_to_string(&args.state_ty))
-                    .ok_or_else(|| {
+                let Some(base_attr) = attrs.iter().find(|attr| attr_is_lera(attr, "model")) else {
+                    return Err("Expected lera::model attribute".to_owned());
+                };
+
+                let parsed_attrs: ModelAttrArgs =
+                    base_attr.parse_args::<ModelAttrArgs>().map_err(|e| {
                         format!(
-                            "#[lera::model] attribute on {} in {:?} must specify a state",
-                            ident, file_path
+                            "Failed to parse #[lera::model] attribute on {} in {:?}: {}",
+                            ident, file_path, e
                         )
                     })?;
 
-                let model_info = collect_model_info(ident, &state_name, syntax_tree, file_path)?;
+                let state_name = type_to_string(&parsed_attrs.state_ty);
+                let has_navigator = parsed_attrs.has_navigator;
+
+                let mut model_info =
+                    collect_model_info(ident, &state_name, syntax_tree, file_path)?;
+                model_info.has_navigator = has_navigator;
+                println!(
+                    "🍉 found model named: {:?}, state: {:?}, has_navigator: {}",
+                    model_info.model_name, model_info.state_name, model_info.has_navigator
+                );
                 models.push(model_info);
             }
         }
@@ -372,6 +392,7 @@ fn collect_model_info(
         samples_state_fn: to_samples_state_fn_name(state_name),
         enable_samples,
         methods,
+        has_navigator: false, // parsed elsewhere
         source_path: file_path.to_path_buf(),
     })
 }
@@ -451,6 +472,7 @@ fn is_unit_type(ty: &Type) -> bool {
 
 struct ModelAttrArgs {
     state_ty: Type,
+    has_navigator: bool,
 }
 
 impl Parse for ModelAttrArgs {
@@ -466,14 +488,29 @@ impl Parse for ModelAttrArgs {
         input.parse::<syn::Token![=]>()?;
         let state_ty: Type = input.parse()?;
 
-        if input.peek(syn::Token![,]) {
+        let has_navigator = if input.peek(syn::Token![,]) {
             input.parse::<syn::Token![,]>()?;
-            if !input.is_empty() {
-                return Err(input.error("unexpected additional arguments"));
-            }
-        }
+            match input.parse::<syn::Ident>() {
+                Ok(key) => {
+                    if key != "navigating" {
+                        Err(syn::Error::new(
+                            key.span(),
+                            "expected `navigating` argument, e.g. #[lera::model(state = MyState, navigating)]",
+                        ))
+                    } else {
+                        Ok(true)
+                    }
+                }
+                Err(_) => Ok(false),
+            }?
+        } else {
+            false
+        };
 
-        Ok(Self { state_ty })
+        Ok(Self {
+            state_ty,
+            has_navigator,
+        })
     }
 }
 
@@ -516,7 +553,7 @@ pub fn type_to_string(ty: &Type) -> String {
             .segments
             .last()
             .map(|seg| seg.ident.to_string())
-            .unwrap_or_else(|| "Unknown".to_string()),
+            .unwrap_or_else(|| "Unknown2".to_string()),
         Type::Reference(type_ref) => {
             format!("&{}", type_to_string(&type_ref.elem))
         }
@@ -527,6 +564,6 @@ pub fn type_to_string(ty: &Type) -> String {
         }
         Type::Array(array) => format!("[{}; _]", type_to_string(&array.elem)),
         Type::Slice(slice) => format!("[{}]", type_to_string(&slice.elem)),
-        _ => "Unknown".to_string(),
+        _ => "Unknown3".to_string(),
     }
 }

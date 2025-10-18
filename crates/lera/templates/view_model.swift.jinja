@@ -15,6 +15,20 @@ extension {{ model.state_name }} {
 	{% endif %}
 }
 
+import SwiftUI
+
+extension {{ model.model_name }} {
+    public convenience init() {
+		let listener = {{ model.model_name }}ViewModel.Listener()
+        self.init(
+			state: .init(), 
+			listener: listener
+			{% if model.has_navigator %},
+			navigatorListenerOnFfiSide: listener{% endif %}
+		)
+	}
+}
+
 @Observable
 @dynamicMemberLookup
 public final class {{ model.model_name }}ViewModel: @unchecked Sendable {
@@ -25,58 +39,115 @@ public final class {{ model.model_name }}ViewModel: @unchecked Sendable {
 	private let listener: {{ model.listener_name }}
 	@ObservationIgnored
 	private let objectId: ObjectIdentifier
+
+		
+		{% if model.has_navigator %}
+		public typealias Path = [Screen]
+		private var _path: Path = []
+		public var path: Binding<Path> {
+			Binding(
+				get: { self._path },
+				set: { _ in fatalError("Call setter on `model.navigator` which ATM is unaccessible") }
+			)
+		}
+		{% endif %}
 	
-	private init(state: {{ model.state_name }}, listener: {{ model.listener_name }}) {
+	private init(
+		model: {{ model.model_name }},
+		state: {{ model.state_name }}, 
+		listener: Listener
+	) {
 		self.state = state
 		self.listener = listener
-		self.model = {{ model.model_name }}(state: state, listener: listener)
-		self.objectId = ObjectIdentifier(self.model)
+		self.model = model
+		self.objectId = model.id
+
+		listener.addOnStateChangeForwarder { [weak self] newState in
+				print("Swift forwarder got new state")
+				self?.state = newState
+			}
+			{% if model.has_navigator %}
+			listener.addNavigationForwarder { path in
+				print("Swift navigation path changed: \\(path)")
+				self._path = path
+			}
+		{% endif %}
+	}
+
+	public convenience init(model: {{ model.model_name }}) {
+		self.init(model: model, state: model.getState(), listener: model.getStateChangeListener() as! Listener)
+	}
+
+
+	private convenience init(
+		state: {{ model.state_name }}, 
+		listener: Listener
+	) {
+		self.init(
+			model: {{ model.model_name }}(
+				state: state,
+				listener: listener{% if model.has_navigator %},
+				navigatorListenerOnFfiSide: listener{% endif %}
+			),
+			state: state,
+			listener: listener
+		)
 	}
 	
 	deinit {
 		print("Swift deinit {{ model.model_name }}ViewModel")
 	}
 	
-	public convenience init(state: {{ model.state_name }} = {{ model.state_name }}()) {
-		let listener = Listener()
-		self.init(state: state, listener: listener)
-		listener.add(forwarder: Listener.Forwarder { [weak self] newState in
-			print("Swift forwarder got new state")
-			self?.state = newState
-		})
+		public convenience init(
+			state: {{ model.state_name }} = {{ model.state_name }}()
+		) {
+			let listener = Listener()
+			self.init(state: state, listener: listener)
+		}
 	}
+
+extension {{ model.model_name }}: Identifiable {
+	public typealias ID = ObjectIdentifier
+	public var id: ID { ObjectIdentifier(self) }
 }
 
 // MARK: Listener
 extension {{ model.model_name }}ViewModel {
-	fileprivate final class Listener: {{ model.listener_name }}, @unchecked Sendable {
+	fileprivate final class Listener: {{ model.listener_name }}{% if model.has_navigator %}, ListenerOfNavigationChangesMadeByRust{% endif %}, @unchecked Sendable {
 
-		fileprivate struct Forwarder {
-			typealias OnStateChange = @Sendable ({{ model.state_name }}) -> Void
-			private let onStateChange: OnStateChange
-			init(_ onStateChange: @escaping OnStateChange) {
-				self.onStateChange = onStateChange
-			}
-			fileprivate func forward(_ state: {{ model.state_name }}) {
-				self.onStateChange(state)
-			}
-		}
-		
-		private var forwarder: Forwarder?
+	
+		{% if model.has_navigator %}
+		typealias OnNavigationChange = @Sendable (Path) -> Void
+		private var navigationForwarder: OnNavigationChange?
+		{% endif %}
+
+		typealias OnStateChange = @Sendable ({{ model.state_name }}) -> Void
+		private var onStateChangeForwarder: OnStateChange?
 		init() {}
 		
 		deinit {
 			print("Swift deinit {{ model.model_name }}ViewModel.Listener")
 		}
 		
-		fileprivate func add(forwarder: Forwarder) {
-			self.forwarder = forwarder
+		fileprivate func addOnStateChangeForwarder(_ forwarder: @escaping OnStateChange) {
+			self.onStateChangeForwarder = forwarder
 		}
 		
 		// MARK: {{ model.listener_name }}
 		func onStateChange(state: {{ model.state_name }}) {
-			forwarder?.forward(state)
+			onStateChangeForwarder?(state)
 		}
+		{% if model.has_navigator %}
+		
+		// MARK: ListenerOfNavigationChangesMadeByRust
+		func pathChangedInRust(path: [Screen]) {
+			navigationForwarder?(path)
+		}
+		
+		fileprivate func addNavigationForwarder(_ forwarder: @escaping OnNavigationChange) {
+			self.navigationForwarder = forwarder
+		}
+		{% endif %}
 	}
 }
 

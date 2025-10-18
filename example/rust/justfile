@@ -5,6 +5,9 @@ test: unit-test bindgen-test
 unit-test: 
   cargo test --lib
 
+build:
+  cargo build
+
 bindgen-test: 
   CLASSPATH="$(pwd)/../android/jars/jna.jar:$(pwd)/../android/jars/kotlinx-coroutines-core-jvm.jar" cargo test
 

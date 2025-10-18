@@ -14,7 +14,6 @@ path = "src/swift_build.rs"
 name = "android-build"
 path = "src/android_build.rs"
 
-
 [dependencies]
 # Internal dependencies
 lera = { path = "../../crates/lera" }

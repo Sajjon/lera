@@ -70,8 +70,13 @@ impl<T: StateChangeListener + ?Sized> StateChangeListener for Arc<T> {
 pub trait LeraModel {
     type State: ModelState;
     type Listener: StateChangeListener<State = Self::State>;
+    type NavigatorDeps;
 
-    fn new(state: Self::State, listener: Self::Listener) -> Arc<Self>
+    fn new(
+        state: Self::State,
+        listener: Self::Listener,
+        navigator_deps: Self::NavigatorDeps,
+    ) -> Arc<Self>
     where
         Self: Sized;
 

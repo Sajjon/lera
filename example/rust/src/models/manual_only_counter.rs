@@ -1,6 +1,4 @@
-use crate::counter::CounterState;
 use crate::prelude::*;
-use std::collections::HashMap;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[lera::state]

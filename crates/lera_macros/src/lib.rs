@@ -97,10 +97,12 @@ pub fn default_params(_attr: TokenStream, item: TokenStream) -> TokenStream {
     item
 }
 
+/// The `[lera::model]` procmacro creates ViewModels usable in Swift/Kotlin
 #[proc_macro_attribute]
 pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as ModelArgs);
     let state_ty = args.state_ty;
+    let has_navigator = args.has_navigator;
 
     let mut item_struct = parse_macro_input!(item as ItemStruct);
     let object_path = parse_path("uniffi::Object");
@@ -130,6 +132,12 @@ pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             fields_named.named.clear();
             fields_named.named.push(state_field);
+            if has_navigator {
+                let navigator_field: Field = syn::parse_quote! {
+                    navigator: Arc<Navigator>
+                };
+                fields_named.named.push(navigator_field);
+            }
             fields_named.named.push(listener_field);
             for field in user_fields.iter() {
                 fields_named.named.push(field.clone());
@@ -184,27 +192,38 @@ pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let state_ty_clone = state_ty.clone();
 
+    let navigator_deps_ty = if has_navigator {
+        quote! { Arc<dyn ListenerOfNavigationChangesMadeByRust> }
+    } else {
+        quote! { () }
+    };
+
+    let navigator_field_init = if has_navigator {
+        quote! { navigator: Arc::new(Navigator::new(navigator_listener_on_ffi_side.clone())), }
+    } else {
+        quote! {}
+    };
+
+    let make_self = quote! {
+        Arc::new(Self {
+            state: Arc::new(RwLock::new(state)),
+            #navigator_field_init
+            state_change_listener: listener,
+            #(#user_field_inits,)*
+        })
+    };
+
     let new_body = if has_background_task {
         quote! {
             let should_start_auto_increment = state.is_auto_incrementing;
-            let counter = Arc::new(Self {
-                state: Arc::new(RwLock::new(state)),
-                state_change_listener: listener,
-                #(#user_field_inits,)*
-            });
+            let counter = #make_self;
             if should_start_auto_increment {
                 counter.start_auto_incrementing();
             }
             counter
         }
     } else {
-        quote! {
-            Arc::new(Self {
-                state: Arc::new(RwLock::new(state)),
-                state_change_listener: listener,
-                #(#user_field_inits,)*
-            })
-        }
+        make_self
     };
 
     let mut default_generics = item_struct.generics.clone();
@@ -227,7 +246,7 @@ pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
         without_listener_where_clause,
     ) = without_listener_generics.split_for_impl();
 
-    let without_listener_params: Vec<proc_macro2::TokenStream> = user_fields
+    let user_without_listener_params: Vec<proc_macro2::TokenStream> = user_fields
         .iter()
         .map(|field| {
             let ident = field.ident.as_ref().expect("named field must have ident");
@@ -235,6 +254,14 @@ pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
             quote! { #ident: #ty }
         })
         .collect();
+
+    let mut without_listener_params: Vec<proc_macro2::TokenStream> = Vec::new();
+    if has_navigator {
+        without_listener_params.push(quote! {
+            navigator_listener_on_ffi_side: Self::NavigatorDeps
+        });
+    }
+    without_listener_params.extend(user_without_listener_params.iter().cloned());
 
     let without_listener_field_inits: Vec<proc_macro2::TokenStream> = user_fields
         .iter()
@@ -244,6 +271,12 @@ pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect();
 
+    let navigator_without_listener_init = if has_navigator {
+        quote! { navigator: Arc::new(Navigator::new(navigator_listener_on_ffi_side.clone())), }
+    } else {
+        quote! {}
+    };
+
     let without_listener_impl = quote! {
         impl #without_listener_impl_generics #struct_ident #without_listener_ty_generics #without_listener_where_clause {
             pub fn without_listener(state: #state_ty #(, #without_listener_params)*) -> Self {
@@ -251,6 +284,7 @@ pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                 Self {
                     state: Arc::new(RwLock::new(state)),
+                    #navigator_without_listener_init
                     state_change_listener,
                     #(#without_listener_field_inits,)*
                 }
@@ -263,13 +297,17 @@ pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
         .map(|_| quote! { Default::default() })
         .collect();
 
-    let default_impl = quote! {
-        impl #default_impl_generics Default for #struct_ident #default_ty_generics #default_where_clause {
-            fn default() -> Self {
-                Self::without_listener(
-                    #state_ty::default()
-                    #(, #user_field_default_values)*
-                )
+    let default_impl = if has_navigator {
+        proc_macro2::TokenStream::new()
+    } else {
+        quote! {
+            impl #default_impl_generics Default for #struct_ident #default_ty_generics #default_where_clause {
+                fn default() -> Self {
+                    Self::without_listener(
+                        #state_ty::default()
+                        #(, #user_field_default_values)*
+                    )
+                }
             }
         }
     };
@@ -461,6 +499,12 @@ pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
+    let navigator_param = if has_navigator {
+        quote! { navigator_listener_on_ffi_side: Self::NavigatorDeps }
+    } else {
+        quote! { _navigator_listener_on_ffi_side: Self::NavigatorDeps }
+    };
+
     let expanded = quote! {
         #item_struct
 
@@ -483,8 +527,13 @@ pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
         impl ::lera::LeraModel for #struct_ident {
             type State = #state_ty;
             type Listener = Arc<dyn #listener_ident>;
+            type NavigatorDeps = #navigator_deps_ty;
 
-            fn new(state: Self::State, listener: Self::Listener) -> Arc<Self> {
+            fn new(
+                state: Self::State,
+                listener: Self::Listener,
+                #navigator_param,
+            ) -> Arc<Self> {
                 #new_body
             }
 
@@ -502,20 +551,16 @@ pub fn model(attr: TokenStream, item: TokenStream) -> TokenStream {
         #debug_impl_tokens
         #display_impl_tokens
     };
-
     expanded.into()
 }
 
 #[proc_macro_attribute]
 pub fn api(attr: TokenStream, item: TokenStream) -> TokenStream {
-    if !attr.is_empty() {
-        return syn::Error::new_spanned(
-            proc_macro2::TokenStream::from(attr),
-            "`#[lera::api]` does not accept arguments",
-        )
-        .to_compile_error()
-        .into();
-    }
+    let args = if attr.is_empty() {
+        ApiArgs::default()
+    } else {
+        parse_macro_input!(attr as ApiArgs)
+    };
 
     let mut item_impl = parse_macro_input!(item as ItemImpl);
     if item_impl.trait_.is_some() {
@@ -574,23 +619,68 @@ pub fn api(attr: TokenStream, item: TokenStream) -> TokenStream {
     });
 
     if !has_constructor {
-        let constructor: ImplItemFn = syn::parse_quote! {
-            #[uniffi::constructor(name = "new")]
-            pub fn with_state_and_listener(
-                state: #state_ident,
-                listener: Arc<dyn #listener_ident>,
-            ) -> Arc<Self> {
-                Self::new(state, listener)
+        let constructor: ImplItemFn = if args.has_navigator {
+            syn::parse_quote! {
+                #[uniffi::constructor(name = "new")]
+                pub fn with_state_and_listener(
+                    state: #state_ident,
+                    listener: Arc<dyn #listener_ident>,
+                    navigator_listener_on_ffi_side: Arc<dyn ListenerOfNavigationChangesMadeByRust>,
+                ) -> Arc<Self> {
+                    Self::new(state, listener, navigator_listener_on_ffi_side)
+                }
+            }
+        } else {
+            syn::parse_quote! {
+                #[uniffi::constructor(name = "new")]
+                pub fn with_state_and_listener(
+                    state: #state_ident,
+                    listener: Arc<dyn #listener_ident>,
+                ) -> Arc<Self> {
+                    Self::new(state, listener, ())
+                }
             }
         };
         item_impl.items.insert(0, ImplItem::Fn(constructor));
+        let state_getter: ImplItem = syn::parse_quote! {
+            pub fn get_state(&self) -> #state_ident {
+                let state_guard = self.state.read().expect("Failed to acquire read lock for state");
+                state_guard.clone()
+            }
+        };
+        item_impl.items.push(state_getter);
+        let listener_getter: ImplItem = syn::parse_quote! {
+            pub fn get_state_change_listener(&self) -> Arc<dyn #listener_ident> {
+                self.state_change_listener.clone()
+            }
+        };
+        item_impl.items.push(listener_getter);
     }
 
     quote! { #item_impl }.into()
 }
 
+#[derive(Default)]
+struct ApiArgs {
+    has_navigator: bool,
+}
+
+impl Parse for ApiArgs {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let ident: Ident = input.parse()?;
+        if ident != "navigating" {
+            return Err(syn::Error::new(
+                ident.span(),
+                "expected `navigating` argument, e.g. #[lera::api(navigating)]",
+            ));
+        }
+        Ok(Self { has_navigator: true })
+    }
+}
+
 struct ModelArgs {
     state_ty: Type,
+    has_navigator: bool,
 }
 
 impl Parse for ModelArgs {
@@ -608,12 +698,29 @@ impl Parse for ModelArgs {
 
         if input.peek(Token![,]) {
             input.parse::<Token![,]>()?;
-            if !input.is_empty() {
-                return Err(input.error("unexpected additional arguments"));
+            if input.is_empty() {
+                return Err(input.error("unexpected comma (,) without additional arguments"));
             }
         }
 
-        Ok(Self { state_ty })
+        let has_navigator = match input.parse::<Ident>() {
+            Ok(key) => {
+                if key != "navigating" {
+                    Err(syn::Error::new(
+                        key.span(),
+                        "expected `navigating` argument, e.g. #[lera::model(state = MyState, navigating)]",
+                    ))
+                } else {
+                    Ok(true)
+                }
+            }
+            Err(_) => Ok(false),
+        }?;
+
+        Ok(Self {
+            state_ty,
+            has_navigator,
+        })
     }
 }
 
