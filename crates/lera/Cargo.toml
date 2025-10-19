@@ -17,4 +17,5 @@ syn.workspace = true
 uniffi = { workspace = true, features = ["cli"] }
 uniffi_bindgen = { workspace = true }
 regex = "1.10"
+log.workspace = true
 quote.workspace = true

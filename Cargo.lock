@@ -399,6 +399,7 @@ dependencies = [
  "clap",
  "lera_macros",
  "lera_uniffi_build",
+ "log",
  "quote",
  "regex",
  "samples-core",

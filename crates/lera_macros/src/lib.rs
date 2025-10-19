@@ -536,16 +536,6 @@ pub fn api(attr: TokenStream, item: TokenStream) -> TokenStream {
         item_impl.attrs.push(syn::parse_quote!(#[uniffi::export]));
     }
 
-    // // Add `#[async_trait::async_trait]` to the impl block if not already present
-    // // so we can support async methods
-    // if !item_impl
-    //     .attrs
-    //     .iter()
-    //     .any(|attr| attr.path().is_ident("async_trait"))
-    // {
-    //     item_impl.attrs.push(syn::parse_quote!(#[async_trait::async_trait]));
-    // }
-
     let self_ty = item_impl.self_ty.as_ref();
     let struct_ident = match self_ty {
         Type::Path(type_path) => type_path

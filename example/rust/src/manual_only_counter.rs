@@ -15,7 +15,7 @@ pub struct ManualOnlyCounter {}
 #[lera::api]
 impl ManualOnlyCounter {
     pub fn increment_button_tapped(self: &Arc<Self>) {
-        println!("Rust: Incrementing counter");
+        debug!("Incrementing counter");
         self.mutate(|state| {
             state.count += 1;
         });
@@ -201,7 +201,7 @@ mod tests {
 
         assert!(result.is_ok());
         let hash_state = result.unwrap();
-        println!("HashState: {:?}", hash_state);
+        debug!("HashState: {:?}", hash_state);
         assert_eq!(hash_state.hash, "95e1c734f1ee2f27".to_owned());
     }
 }
