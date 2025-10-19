@@ -30,6 +30,7 @@ class {{ model.model_name }}ViewModel(
 
     init {
         listener.addForwarder { newState ->
+        log.v("forwarder got new state")
             _uiState.value = newState
         }
     }
@@ -72,3 +73,44 @@ class {{ model.model_name }}ViewModel(
 
 typealias {{ model.model_name }}ViewModelState = {{ model.state_name }}
 {% endfor %}
+
+// MARK: Logging
+val log: timber.log.Timber.Tree
+    get() = Lera.kotlinLog
+
+private object Lera : FfiLogger {
+    private const val RUST_LOG_TAG = "🦀 Rust"
+    private const val KOTLIN_LOG_TAG = "🤖 Android"
+
+    val kotlinLog: timber.log.Timber.Tree
+        get() = timber.log.Timber.tag(KOTLIN_LOG_TAG)
+
+    private val rustLog: timber.log.Timber.Tree
+        get() = timber.log.Timber.tag(RUST_LOG_TAG)
+
+    init {
+        kotlinDiagnosticsLogAtAllLevels()
+        installLogger(this)
+        rustDiagnosticsLogAtAllLevels()
+    }
+
+    private fun kotlinDiagnosticsLogAtAllLevels() {
+        val logger = kotlinLog
+        logger.v("Trace")
+        logger.d("Debug")
+        logger.i("Info")
+        logger.w("Warn")
+        logger.e("Error")
+    }
+
+    override fun logMessage(message: String, level: FfiLogLevel) {
+        val logger = rustLog
+        when (level) {
+            FfiLogLevel.ERROR -> logger.e("%s", message)
+            FfiLogLevel.WARN -> logger.w("%s", message)
+            FfiLogLevel.INFO -> logger.i("%s", message)
+            FfiLogLevel.DEBUG -> logger.d("%s", message)
+            FfiLogLevel.TRACE -> logger.v("%s", message)
+        }
+    }
+}

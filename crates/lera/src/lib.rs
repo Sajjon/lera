@@ -2,8 +2,11 @@ mod bindgen;
 pub use bindgen::{build_android, build_swift};
 pub use lera_macros::{api, default_params, model, state};
 pub use lera_uniffi_build::{AndroidBuildSettings, AndroidTarget, SwiftBuildSettings};
+use log::debug;
 pub use samples_core::Samples;
 use std::sync::{Arc, RwLock};
+mod logging;
+pub use logging::*;
 
 pub mod fmt_utils {
     use core::fmt;
@@ -107,7 +110,7 @@ pub trait LeraModel {
     }
 
     fn notify_state_change(&self, new_state: Self::State) {
-        println!("Rust: Notifying listener of state change: {:?}", new_state);
+        debug!("Notifying listener of state change: {:?}", new_state);
         self.get_state_change_listener().on_state_change(new_state);
     }
 }

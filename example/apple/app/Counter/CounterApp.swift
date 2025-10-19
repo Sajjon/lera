@@ -6,6 +6,7 @@
 //
 
 import CountersSwift
+import OSLog
 import SwiftUI
 
 struct RootView: View {
@@ -13,9 +14,7 @@ struct RootView: View {
 	@State var manualCounterOnlyModel: ManualOnlyCounterViewModel?
 	var body: some View {
 		VStack {
-			if let counterModel =
-				counterModel
-			{
+			if let counterModel = counterModel {
 				nilViewsButton
 				CounterView(
 					model:
@@ -39,13 +38,11 @@ struct RootView: View {
 	@ViewBuilder
 	var nilViewsButton: some View {
 		Button("Nil Models", role: .destructive) {
-			print(
-				"\n\nSwift Nil models called"
+			log.debug(
+				"Nil models called"
 			)
 			self.counterModel = nil
-			self
-				.manualCounterOnlyModel =
-				nil
+			self.manualCounterOnlyModel = nil
 		}
 	}
 

@@ -3,7 +3,7 @@ use std::{
     sync::{Mutex, OnceLock},
     time::Duration,
 };
-
+use crate::prelude::*;
 use tokio::runtime::{Builder, Runtime};
 
 static TOKIO_RT: OnceLock<Runtime> = OnceLock::new();
@@ -36,12 +36,14 @@ struct BackgroundTaskInner {
 
 pub type ShouldContinue = bool;
 
+
+
 impl BackgroundTaskInner {
     fn do_start_background_task(
         interval_ms: Duration,
         tick: impl Fn() -> ShouldContinue + Send + 'static,
     ) -> tokio::task::JoinHandle<()> {
-        println!("Rust: Starting background task...");
+        info!("Starting background task...");
         let runtime = get_runtime();
         runtime.spawn(async move {
             let mut interval = tokio::time::interval(interval_ms);
@@ -51,7 +53,7 @@ impl BackgroundTaskInner {
             loop {
                 interval.tick().await;
                 if !tick() {
-                    println!("Rust: Background task stopping as requested");
+                    info!("Background task stopping as requested");
                     break;
                 }
             }

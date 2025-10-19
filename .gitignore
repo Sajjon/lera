@@ -3,9 +3,9 @@ example/android/jars/*.jar
 
 DerivedData/
 build/
-example/apple/app/Counter.xcodeproj/project.xcworkspace/xcuserdata/sajjon.xcuserdatad/UserInterfaceState.xcuserstate
+example/apple/app/Counter.xcodeproj/project.xcworkspace/xcuserdata/*.xcuserdatad/*
 example/apple/app/Counter.xcodeproj/project.xcworkspace/contents.xcworkspacedata
-example/apple/app/Counter.xcodeproj/xcuserdata/sajjon.xcuserdatad/xcschemes/xcschememanagement.plist
+example/apple/app/Counter.xcodeproj/xcuserdata/*.xcuserdatad/xcschemes/xcschememanagement.plist
 example/apple/.swiftpm/
 
 

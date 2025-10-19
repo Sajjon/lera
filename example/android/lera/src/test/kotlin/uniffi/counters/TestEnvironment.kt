@@ -1,12 +1,16 @@
 package uniffi.counters
 
+import timber.log.Timber
 import java.nio.file.Files
-import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal object TestEnvironment {
+    private val timberInstalled = AtomicBoolean(false)
+
     init {
         configureNativeLibrary()
+        installTimber()
     }
 
     fun ensure() = Unit
@@ -30,5 +34,23 @@ internal object TestEnvironment {
         }
 
         System.setProperty("uniffi.component.counters.libraryOverride", candidate.toString())
+    }
+
+    private fun installTimber() {
+        if (timberInstalled.compareAndSet(false, true)) {
+            Timber.plant(object : Timber.Tree() {
+                override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                    val output = buildString {
+                        if (tag != null) append(tag).append(": ")
+                        append(message)
+                        if (t != null) {
+                            appendLine()
+                            append(t.stackTraceToString())
+                        }
+                    }
+                    println(output)
+                }
+            })
+        }
     }
 }

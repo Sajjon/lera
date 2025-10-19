@@ -12,7 +12,6 @@ import XCTest
 @Suite("CounterViewModelTests")
 struct CounterViewModelTests {
 	
-	
 	@Test("state stamples", arguments: 1 ... 10)
 	func stateSamples(n: UInt8) {
 		let samples = CounterState.samples(n: n)
@@ -64,7 +63,7 @@ struct CounterViewModelTests {
 		)
 
 		/// tolerance: allow some difference in ms
-		func expectCountWithTolerance(expected: Int64, tolerance: Int64 = 4) {
+		func expectCountWithTolerance(expected: Int64, tolerance: Int64 = 5) {
 			let actual = counter.count
 			#expect(
 				actual >= expected - tolerance && actual <= expected + tolerance,

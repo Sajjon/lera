@@ -34,14 +34,14 @@ public final class {{ model.model_name }}ViewModel: @unchecked Sendable {
 	}
 	
 	deinit {
-		print("Swift deinit {{ model.model_name }}ViewModel")
+		log.debug("deinit {{ model.model_name }}ViewModel")
 	}
 	
 	public convenience init(state: {{ model.state_name }} = {{ model.state_name }}()) {
 		let listener = Listener()
 		self.init(state: state, listener: listener)
 		listener.add(forwarder: Listener.Forwarder { [weak self] newState in
-			print("Swift forwarder got new state")
+			log.trace("forwarder got new state")
 			self?.state = newState
 		})
 	}
@@ -66,7 +66,7 @@ extension {{ model.model_name }}ViewModel {
 		init() {}
 		
 		deinit {
-			print("Swift deinit {{ model.model_name }}ViewModel.Listener")
+			log.debug("deinit {{ model.model_name }}ViewModel.Listener")
 		}
 		
 		fileprivate func add(forwarder: Forwarder) {
@@ -142,3 +142,49 @@ extension {{ model.model_name }}ViewModel: CustomDebugStringConvertible {
 }
 
 {% endfor %}
+
+// MARK: Logging
+import OSLog
+
+public var log: Logger {
+    Lera.shared.swiftLog
+}
+
+fileprivate final class Lera {
+    fileprivate let rustLog: Logger = Logger(subsystem: "lera", category: "🦀 Rust")
+    fileprivate let swiftLog: Logger = Logger(subsystem: "lera", category: "🐦‍🔥 Swift")
+    fileprivate init() {
+		installLogger(logger: self)
+        #if DEBUG
+        rustDiagnosticsLogAtAllLevels()
+		swiftDiagnosticsLogAtAllLevels()
+        #endif
+	}
+    
+    private func swiftDiagnosticsLogAtAllLevels() {
+        swiftLog.trace("Trace")
+        swiftLog.debug("Debug")
+        swiftLog.info("Info")
+        swiftLog.notice("Notice")
+        swiftLog.warning("Warn")
+        swiftLog.error("Error")
+        swiftLog.fault("Fault")
+        swiftLog.critical("Critical")
+    }
+}
+
+extension Lera: FfiLogger {
+    func logMessage(message: String, level: FfiLogLevel) {
+        switch level {
+        case .trace: rustLog.trace("\(message)")
+        case .debug: rustLog.debug("\(message)")
+        case .info: rustLog.info("\(message)")
+        case .warn: rustLog.warning("\(message)")
+        case .error: rustLog.error("\(message)")
+        }
+    }
+}
+
+extension Lera {
+    static let `shared`: Lera = Lera()
+}

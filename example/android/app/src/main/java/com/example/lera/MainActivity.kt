@@ -10,11 +10,20 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import com.example.lera.ui.CounterScreen
 import com.example.lera.ui.theme.LeraTheme
+import uniffi.counters.log
+import timber.log.Timber
 
 class MainActivity : ComponentActivity() {
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize Timber so logs go to Logcat
+        if (Timber.forest().isEmpty()) {
+            Timber.plant(Timber.DebugTree())
+        }
+        log.i("Logger ready")
+
         enableEdgeToEdge()
         setContent {
             LeraTheme {
