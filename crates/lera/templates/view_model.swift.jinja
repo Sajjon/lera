@@ -155,8 +155,10 @@ fileprivate final class Lera {
     fileprivate let swiftLog: Logger = Logger(subsystem: "lera", category: "🐦‍🔥 Swift")
     fileprivate init() {
 		installLogger(logger: self)
+        #if DEBUG
         rustDiagnosticsLogAtAllLevels()
 		swiftDiagnosticsLogAtAllLevels()
+        #endif
 	}
     
     private func swiftDiagnosticsLogAtAllLevels() {
